@@ -1,0 +1,19 @@
+[project]
+name = "vaultcraft-backend"
+version = "0.0.1"
+description = "VaultCraft v0 backend (metrics, indexing, APIs)"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pydantic-settings",
+  "httpx",
+  "web3",
+  "sqlalchemy",
+  "aiosqlite",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
