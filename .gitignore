@@ -6,8 +6,14 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+# LLM-related files
+
+# Environments
+.env
 .venv
 .code-workspace
 
-# LLM-related files
+hardhat/node_modules/
+hardhat/artifacts/
+hardhat/typechain-types/
+hardhat/cache/

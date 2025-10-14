@@ -7,6 +7,7 @@ interface Vm {
     function prank(address) external;
     function startPrank(address) external;
     function stopPrank() external;
+    function expectEmit(bool, bool, bool, bool) external;
 }
 
 address constant HEVM_ADDRESS = address(uint160(uint256(keccak256('hevm cheat code'))));
@@ -25,4 +26,3 @@ contract TestBase {
         require(diff <= tol, err);
     }
 }
-

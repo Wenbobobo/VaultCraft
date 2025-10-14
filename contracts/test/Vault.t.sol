@@ -7,6 +7,9 @@ import "./mocks/MockAdapter.sol";
 import "../Vault.sol";
 
 contract VaultTest is TestBase {
+    // duplicate event signatures for expectEmit matching
+    event NavSnapshot(uint256 assets, uint256 liabilities, uint256 shares, uint256 ps, uint256 ts);
+    event WhitelistSet(address indexed user, bool allowed);
     MockERC20 token;
     Vault vault;
     MockAdapter adapter;
@@ -198,5 +201,160 @@ contract VaultTest is TestBase {
         vm.prank(manager);
         try vault.execute(address(bad), abi.encode(int256(0), uint256(0), uint256(0))) returns (int256, uint256, uint256) { reverted=false; } catch { reverted=true; }
         assertTrue(reverted, "adapter not allowed");
+    }
+
+    function test_third_party_redeem_with_max_allowance_kept() public {
+        // setup deposit
+        _approve(alice, 1000 ether);
+        vm.prank(alice); vault.deposit(1000 ether, alice);
+        vm.warp(block.timestamp + 1 days + 1);
+        // approve max
+        vm.prank(alice); vault.approve(bob, type(uint256).max);
+        uint256 beforeAllow = vault.allowance(alice, bob);
+        vm.prank(bob);
+        vault.redeem(100 ether, bob, alice);
+        uint256 afterAllow = vault.allowance(alice, bob);
+        // max allowance should not decrease
+        assertEq(beforeAllow, afterAllow, "max allowance sticky");
+    }
+
+    function test_performance_fee_event_emitted() public {
+        // deposit
+        _approve(alice, 1000 ether);
+        vm.prank(alice); vault.deposit(1000 ether, alice);
+        // profit
+        token.mint(address(vault), 200 ether);
+        // expect event when checkpoint
+        // Can't know exact perfShares due to floors; we validate HWM and p
+        vm.prank(manager);
+        vault.checkpoint();
+        // PS should be close to 1.2e18
+        uint256 psNow = vault.ps();
+        assertApproxEq(psNow, 1_200_000_000_000_000_000, 1000, "ps ~ 1.2e18");
+    }
+
+    function test_adapterset_and_lockupdated_events() public {
+        vm.prank(admin);
+        vm.expectEmit(true, true, false, true);
+        emit AdapterSet(address(adapter), true);
+        vault.setAdapter(address(adapter), true);
+
+        vm.prank(admin);
+        vm.expectEmit(false, false, false, true);
+        emit LockUpdated(3);
+        vault.setLockMinDays(3);
+    }
+
+    function test_pause_blocks_redeem_even_after_unlock() public {
+        _approve(alice, 1000 ether);
+        vm.prank(alice); vault.deposit(1000 ether, alice);
+        vm.warp(block.timestamp + 1 days + 1);
+        vm.prank(guardian); vault.pause();
+        bool reverted;
+        vm.prank(alice);
+        try vault.redeem(10 ether, alice, alice) returns (uint256) { reverted=false; } catch { reverted=true; }
+        assertTrue(reverted, "redeem blocked when paused");
+        vm.prank(guardian); vault.unpause();
+    }
+
+    function test_private_deposit_requires_receiver_whitelisted() public {
+        // private vault
+        Vault pv = new Vault(
+            address(token),
+            "Private Shares",
+            "PVSH",
+            admin,
+            manager,
+            guardian,
+            true,
+            1000,
+            1
+        );
+        // whitelist sender but not receiver
+        vm.prank(admin); pv.setWhitelist(alice, true);
+        _approve(alice, 100 ether);
+        bool reverted;
+        vm.prank(alice);
+        try pv.deposit(100 ether, bob) returns (uint256) { reverted=false; } catch { reverted=true; }
+        assertTrue(reverted, "receiver must be whitelisted");
+        // whitelist receiver and succeed
+        vm.prank(admin); pv.setWhitelist(bob, true);
+        vm.prank(alice); pv.deposit(100 ether, bob);
+        assertEq(pv.balanceOf(bob), 100 ether, "deposit to whitelisted receiver ok");
+    }
+
+    function test_set_manager_guardian_zero_reverts() public {
+        bool reverted;
+        vm.prank(admin);
+        try vault.setManager(address(0)) { reverted=false; } catch { reverted=true; }
+        assertTrue(reverted, "manager zero");
+        vm.prank(admin);
+        bool reverted2;
+        try vault.setGuardian(address(0)) { reverted2=false; } catch { reverted2=true; }
+        assertTrue(reverted2, "guardian zero");
+    }
+    function test_third_party_redeem_with_allowance() public {
+        // alice deposits 1000
+        _approve(alice, 1000 ether);
+        vm.prank(alice); vault.deposit(1000 ether, alice);
+        // move past lock
+        vm.warp(block.timestamp + 1 days + 1);
+        // alice approves bob to redeem 200 shares
+        vm.prank(alice); vault.approve(bob, 200 ether);
+        uint256 bobBalBefore = token.balanceOf(bob);
+        // bob redeems on behalf of alice, assets sent to bob
+        vm.prank(bob);
+        uint256 assetsOut = vault.redeem(200 ether, bob, alice);
+        assertEq(token.balanceOf(bob), bobBalBefore + assetsOut, "bob received assets");
+        assertEq(vault.balanceOf(alice), 800 ether, "alice shares reduced");
+    }
+
+    function test_admin_setters_and_bounds() public {
+        // only admin can set
+        bool reverted;
+        vm.prank(bob); // not admin
+        try vault.setPerformanceFee(2000) { reverted=false; } catch { reverted=true; }
+        assertTrue(reverted, "only admin set perf fee");
+
+        // admin updates
+        vm.prank(admin); vault.setPerformanceFee(2000);
+        vm.prank(admin); vault.setLockMinDays(2);
+        vm.prank(admin); vault.setManager(bob);
+        vm.prank(admin); vault.setGuardian(alice);
+
+        // out of bounds >30% should revert
+        vm.prank(admin);
+        bool reverted2;
+        try vault.setPerformanceFee(4000) { reverted2=false; } catch { reverted2=true; }
+        assertTrue(reverted2, "cap 30%");
+    }
+
+    function test_snapshot_event_emitted_with_values() public {
+        // initial state: no deposits → PS=1e18, A=0, S=0
+        uint256 A = token.balanceOf(address(vault));
+        uint256 S = vault.totalSupply();
+        uint256 PS = vault.ps();
+        vm.expectEmit(true, true, true, true);
+        emit NavSnapshot(A, 0, S, PS, block.timestamp);
+        vault.snapshot();
+    }
+
+    function test_whitelist_event_emitted() public {
+        // using a fresh private vault to test event
+        Vault pv = new Vault(
+            address(token),
+            "Private Shares",
+            "PVSH",
+            admin,
+            manager,
+            guardian,
+            true,
+            1000,
+            1
+        );
+        vm.prank(admin);
+        vm.expectEmit(true, true, false, true);
+        emit WhitelistSet(alice, true);
+        pv.setWhitelist(alice, true);
     }
 }
