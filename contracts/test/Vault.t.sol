@@ -235,12 +235,12 @@ contract VaultTest is TestBase {
 
     function test_adapterset_and_lockupdated_events() public {
         vm.prank(admin);
-        vm.expectEmit(true, true, false, true);
+        vm.expectEmit(true, true, false, true, address(vault));
         emit AdapterSet(address(adapter), true);
         vault.setAdapter(address(adapter), true);
 
         vm.prank(admin);
-        vm.expectEmit(false, false, false, true);
+        vm.expectEmit(false, false, false, true, address(vault));
         emit LockUpdated(3);
         vault.setLockMinDays(3);
     }
@@ -334,7 +334,7 @@ contract VaultTest is TestBase {
         uint256 A = token.balanceOf(address(vault));
         uint256 S = vault.totalSupply();
         uint256 PS = vault.ps();
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit(true, true, true, true, address(vault));
         emit NavSnapshot(A, 0, S, PS, block.timestamp);
         vault.snapshot();
     }
@@ -353,7 +353,7 @@ contract VaultTest is TestBase {
             1
         );
         vm.prank(admin);
-        vm.expectEmit(true, true, false, true);
+        vm.expectEmit(true, true, false, true, address(pv));
         emit WhitelistSet(alice, true);
         pv.setWhitelist(alice, true);
     }

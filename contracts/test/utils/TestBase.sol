@@ -8,6 +8,7 @@ interface Vm {
     function startPrank(address) external;
     function stopPrank() external;
     function expectEmit(bool, bool, bool, bool) external;
+    function expectEmit(bool, bool, bool, bool, address) external;
 }
 
 address constant HEVM_ADDRESS = address(uint160(uint256(keccak256('hevm cheat code'))));
