@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { config } from '@/config'
 
 type VaultPreview = {
   address: string
@@ -9,10 +10,14 @@ type VaultPreview = {
   mdd?: number
 }
 
-const sample: VaultPreview[] = [
-  { address: '0x1111...abcd', name: 'Public Momentum', type: 'public', aum: 1250000, sharpe: 1.8, mdd: -0.22 },
-  { address: '0x2222...beef', name: 'Private KOL Alpha', type: 'private', aum: 870000, sharpe: 2.3, mdd: -0.15 },
-]
+const sample: VaultPreview[] = config.deployments.baseSepolia.vaults.map(v => ({
+  address: v.address,
+  name: v.name,
+  type: v.type,
+  aum: 1250000,
+  sharpe: 1.8,
+  mdd: -0.22,
+}))
 
 function formatUsd(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -42,4 +47,3 @@ export default function Home() {
     </main>
   )
 }
-

@@ -3,6 +3,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import * as dotenv from "dotenv";
 dotenv.config();
 import "solidity-coverage";
+import "./tasks/vault";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -28,6 +29,11 @@ const config: HardhatUserConfig = {
       url: process.env.RPC_URL || "",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 421614,
+    },
+    hyperTestnet: {
+      url: process.env.HYPER_RPC_URL || "",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 0, // TODO: 填写 Hyper Testnet chainId
     },
   },
 };
