@@ -1,5 +1,4 @@
 import { task } from "hardhat/config";
-import { ethers } from "hardhat";
 
 const ERC20_ABI = [
   "function decimals() view returns (uint8)",
@@ -12,6 +11,7 @@ task("vault:whitelist", "Whitelist/unwhitelist an address for a private vault")
   .addParam("user", "User address")
   .addParam("allowed", "true/false")
   .setAction(async (args, hre) => {
+    const { ethers } = hre;
     const { vault, user, allowed } = args;
     const v = await ethers.getContractAt("Vault", vault);
     const tx = await v.setWhitelist(user, String(allowed).toLowerCase() === "true");
@@ -23,7 +23,8 @@ task("vault:set-adapter", "Allow or disallow an adapter")
   .addParam("vault", "Vault address")
   .addParam("adapter", "Adapter address")
   .addParam("allowed", "true/false")
-  .setAction(async (args) => {
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
     const v = await ethers.getContractAt("Vault", args.vault);
     const tx = await v.setAdapter(args.adapter, String(args.allowed).toLowerCase() === "true");
     await tx.wait();
@@ -33,7 +34,8 @@ task("vault:set-adapter", "Allow or disallow an adapter")
 task("vault:set-lock", "Set minimum lock days")
   .addParam("vault", "Vault address")
   .addParam("days", "Integer days")
-  .setAction(async (args) => {
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
     const v = await ethers.getContractAt("Vault", args.vault);
     const tx = await v.setLockMinDays(Number(args.days));
     await tx.wait();
@@ -43,7 +45,8 @@ task("vault:set-lock", "Set minimum lock days")
 task("vault:set-perf-fee", "Set performance fee (bps)")
   .addParam("vault", "Vault address")
   .addParam("bps", "Basis points (e.g. 1000=10%)")
-  .setAction(async (args) => {
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
     const v = await ethers.getContractAt("Vault", args.vault);
     const tx = await v.setPerformanceFee(Number(args.bps));
     await tx.wait();
@@ -55,7 +58,8 @@ task("vault:deposit", "Approve and deposit into the vault")
   .addParam("asset", "Asset (ERC20) address")
   .addParam("amount", "Amount in human units")
   .addOptionalParam("receiver", "Receiver address (default: deployer)")
-  .setAction(async (args) => {
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
     const [signer] = await ethers.getSigners();
     const receiver = args.receiver || signer.address;
     const v = await ethers.getContractAt("Vault", args.vault);
@@ -72,7 +76,8 @@ task("token:mint", "Mint MockERC20 tokens to an address")
   .addParam("token", "MockERC20 address")
   .addParam("to", "Recipient address")
   .addParam("amount", "Amount in human units")
-  .setAction(async (args) => {
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
     const [signer] = await ethers.getSigners();
     const erc20 = await ethers.getContractAt("MockERC20", args.token, signer);
     const decimals = 18n; // MockERC20 uses 18
@@ -92,6 +97,7 @@ task("vault:create-private", "Create a private Vault with initial config")
   .addOptionalParam("lock", "Lock days (default 1)", "1")
   .addOptionalParam("whitelist", "Comma-separated whitelist addresses", "")
   .setAction(async (args, hre) => {
+    const { ethers } = hre;
     const [deployer] = await ethers.getSigners();
     const manager = args.manager || deployer.address;
     const guardian = args.guardian || deployer.address;

@@ -9,7 +9,8 @@
     "deploy:baseSepolia": "hardhat run scripts/deploy.ts --network baseSepolia",
     "deploy:arbitrumSepolia": "hardhat run scripts/deploy.ts --network arbitrumSepolia",
     "deploy:hyperTestnet": "hardhat run scripts/deploy.ts --network hyperTestnet",
-    "seed": "hardhat run scripts/seed.ts --network baseSepolia"
+    "seed": "hardhat run scripts/seed.ts --network baseSepolia",
+    "ping:hyper": "hardhat run scripts/ping.ts --network hyperTestnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

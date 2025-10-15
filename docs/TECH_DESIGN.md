@@ -332,3 +332,13 @@ Windows 安装 Foundry（提示）
 跨链与特殊资产：
 - v1：只读与会计层支持（不迁移资金），以合成头寸与 NAV 展现
 - v2：桥接/消息与集中会计（跨链 Orchestrator + 多链 Adapter）
+
+---
+
+## 14) Hyper 集成要点（核对自官方文档）
+
+- API Base：Mainnet https://api.hyperliquid.xyz · Testnet https://api.hyperliquid-testnet.xyz
+- HyperEVM RPC：https://rpc.hyperliquid.xyz/evm
+- SDK：优先使用 Python SDK（apps/backend 集成），实现 open/close/reduce 与权益读取
+- 会计：NAV = 现金腿 + Σ(持仓权益)；周期性承诺（hash）供前端/审计校验
+- 权限：Exec Service 使用服务账号与限权策略（额度/频次/白名单）

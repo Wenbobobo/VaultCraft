@@ -45,11 +45,19 @@
 
 ## 5. 开发与配置
 
-- 环境变量（后端）
-  - HYPER_API_URL / WS_URL
-  - HYPER_API_KEY / SECRET（如适用）
-  - EXEC_LIMITS（额度/频次）
-- 测试
-  - mock Hyper API 回放（录制/模拟）
-  - 集成测试：下单→成交→权益→NAV 承诺→前端展示
+- 官方资源（核对）
+  - Python SDK: https://github.com/hyperliquid-dex/hyperliquid-python-sdk
+  - REST: Mainnet https://api.hyperliquid.xyz · Testnet https://api.hyperliquid-testnet.xyz
+  - HyperEVM RPC: https://rpc.hyperliquid.xyz/evm（链上交互用；Testnet RPC 以官方文档为准）
+  - JSON-RPC 支持端点：eth_chainId / eth_call / eth_getLogs 等（详见 For Developers → HyperEVM → JSON-RPC）
 
+- 环境变量（后端）
+  - HYPER_API_URL（默认 https://api.hyperliquid-testnet.xyz）
+  - HYPER_WS_URL（可选）
+  - HYPER_API_KEY / HYPER_API_SECRET（如需鉴权的私有接口）
+  - EXEC_LIMITS（额度/频次/白名单）
+
+- 测试
+  - 单元：构建下单/平仓 payload、权益到 NAV 的转换函数
+  - 集成（可选）：对 Testnet 进行 read-only 调用或使用录制回放
+  - 端到端：下单→成交→权益→NAV 承诺→前端展示（黑客松可演示）

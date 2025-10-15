@@ -31,9 +31,9 @@ const config: HardhatUserConfig = {
       chainId: 421614,
     },
     hyperTestnet: {
-      url: process.env.HYPER_RPC_URL || "",
+      url: process.env.HYPER_RPC_URL || "https://rpc.hyperliquid-testnet.xyz/evm",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 0, // TODO: 填写 Hyper Testnet chainId
+      chainId: 998,
     },
   },
 };
