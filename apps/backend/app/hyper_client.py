@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import httpx
 
@@ -41,3 +41,33 @@ class HyperHTTP:
             except json.JSONDecodeError:
                 return {"raw": r.text}
 
+    # --- Convenience REST helpers (fixture-friendly) ---
+    def get_markets(self) -> Dict[str, Any]:
+        """Fetch available markets metadata (symbol list, filters).
+
+        Note: Exact path/shape depends on Hyper REST; tests monkeypatch `get`.
+        """
+        return self.get("info", params={"type": "meta"})
+
+    def get_index_prices(self, symbols: List[str]) -> Dict[str, float]:
+        """Return index prices for given symbols as {symbol: price}.
+
+        Implementation uses a generic path and is designed to be monkeypatched
+        in tests to avoid network calls.
+        """
+        if not symbols:
+            return {}
+        # Generic endpoint; concrete integration will adapt per Hyper docs.
+        data = self.get("indexPrices", params={"symbols": ",".join(symbols)})
+        # Expect either {"prices": {sym: price}} or a list of {symbol, price}.
+        if isinstance(data, dict) and "prices" in data and isinstance(data["prices"], dict):
+            return {k: float(v) for k, v in data["prices"].items()}
+        if isinstance(data, list):
+            out: Dict[str, float] = {}
+            for item in data:
+                sym = item.get("symbol")
+                px = item.get("price")
+                if sym is not None and px is not None:
+                    out[str(sym)] = float(px)
+            return out
+        return {}
