@@ -59,7 +59,7 @@ npx hardhat test
 
 ---
 
-## 4. 部署
+## 4. 部署（后端 / 前端）
 
 Base Sepolia：
 ```
@@ -77,7 +77,36 @@ npm run deploy:arbitrumSepolia
 
 ---
 
-## 4.1 快速创建私募金库（Task）
+### 4.1 后端（只读 API）
+
+```
+cd apps/backend
+uv venv
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+常用：
+- 健康检查 `GET /health`
+- 市场与价格：`GET /api/v1/markets`、`GET /api/v1/price?symbols=BTC,ETH`
+- 金库与详情：`GET /api/v1/vaults`、`GET /api/v1/vaults/:id`
+
+可选：启用 Hyper 官方 SDK 作为行情源（见 docs/HYPER_DEPLOYMENT.md 第 2 节）。
+
+### 4.2 前端（apps/vaultcraft-frontend）
+
+```
+cd apps/vaultcraft-frontend
+copy .env.example .env.local
+# 编辑 .env.local 中 NEXT_PUBLIC_BACKEND_URL 指向后端
+pnpm i
+pnpm dev
+```
+
+页面：
+- `/` Discover：展示公募/私募金库列表（默认从后端 API 获取，失败回退本地示例）
+- `/vault/[id]`：展示 KPI 与 NAV 曲线（调用后端 metrics/nav 接口）
+
+## 4.3 快速创建私募金库（Task）
 
 无需单独脚本，直接用 Hardhat Task：
 
