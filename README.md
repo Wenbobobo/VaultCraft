@@ -130,6 +130,30 @@ $env:PRIVATE_KEY="0x..."  # 部署私钥，务必小额测试
 
 ---
 
+## 常用 Hardhat 任务（部署/演示）
+
+```
+# 创建私募金库（可指定资产/经理/守护者/白名单/费率/锁期）
+npx hardhat vault:create-private --network baseSepolia \
+  --perf 1000 --lock 1 --whitelist 0xInvestor
+
+# 给 MockERC20 铸币
+npx hardhat token:mint --network baseSepolia \
+  --token 0xMockToken --to 0xYourAddr --amount 1000
+
+# 存入金库
+npx hardhat vault:deposit --network baseSepolia \
+  --vault 0xVault --asset 0xToken --amount 100
+
+# 配置白名单/适配器/锁期/绩效费
+npx hardhat vault:whitelist --network baseSepolia --vault 0xVault --user 0xU --allowed true
+npx hardhat vault:set-adapter --network baseSepolia --vault 0xVault --adapter 0xA --allowed true
+npx hardhat vault:set-lock --network baseSepolia --vault 0xVault --days 1
+npx hardhat vault:set-perf-fee --network baseSepolia --vault 0xVault --bps 1000
+```
+
+---
+
 ## 快速开始（Web 前端）
 
 ```
@@ -231,3 +255,7 @@ docs/                    # PRD 与技术方案
 
 - 产品文档：docs/PRD.md（v0 范围、参数与治理矩阵、Backlog）
 - 技术方案：docs/TECH_DESIGN.md（架构、接口、事件、不变量、TDD 计划）
+ - 架构解析：docs/ARCHITECTURE.md（前端/后端/链上职责与数据流）
+ - 前端规范：docs/FRONTEND_SPEC.md（页面/组件/接口契约/样式/交互）
+ - Hyper 集成：docs/HYPER_INTEGRATION.md（v1 执行/行情集成方案）
+ - 配置清单：docs/CONFIG.md（env、deployments 记录与建议）

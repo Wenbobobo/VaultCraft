@@ -19,6 +19,7 @@ wheels/
 .code-workspace
 .vscode/
 .idea/
+config.ts
 
 # Blockchain related
 typechain-types/
@@ -48,3 +49,5 @@ npm-debug.log*
 
 # Other
 *.exe
+log.txt
+*.pdf

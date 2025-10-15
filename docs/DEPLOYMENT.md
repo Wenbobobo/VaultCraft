@@ -77,6 +77,32 @@ npm run deploy:arbitrumSepolia
 
 ---
 
+## 4.1 快速创建私募金库（Task）
+
+无需单独脚本，直接用 Hardhat Task：
+
+```
+# 创建私募金库（默认部署 MockERC20，设置绩效费与锁定期，并批量白名单）
+npx hardhat vault:create-private --network baseSepolia \
+  --perf 1000 --lock 1 \
+  --whitelist 0xInvestor1,0xInvestor2
+
+# 指定已有资产、经理/守护者
+npx hardhat vault:create-private --network baseSepolia \
+  --asset 0xYourAsset --manager 0xMgr --guardian 0xGua \
+  --perf 1000 --lock 1 --whitelist 0xInvestor
+
+# MockERC20 铸币（用于测试）
+npx hardhat token:mint --network baseSepolia \
+  --token 0xMockToken --to 0xYourAddr --amount 1000
+
+# 存入金库（自动 approve 后 deposit）
+npx hardhat vault:deposit --network baseSepolia \
+  --vault 0xVault --asset 0xToken --amount 100
+```
+
+---
+
 ## 5. 部署后验证（手动）
 
 - 读取 `ps()`：应为 1e18（初始净值 1）
