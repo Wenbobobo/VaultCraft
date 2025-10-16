@@ -4,6 +4,7 @@ from typing import Dict, List
 
 from .hyper_client import HyperHTTP
 from .settings import Settings, settings
+from .cache import TTLCache
 
 
 class PriceProvider:
@@ -80,3 +81,20 @@ class PriceRouter(PriceProvider):
                 pass
         # fallback to REST; outer layer may fallback to deterministic
         return self.rest.get_index_prices(symbols)
+
+
+class CachedPriceRouter(PriceProvider):
+    def __init__(self, router: PriceRouter | None = None, ttl_seconds: float | None = None):
+        self.router = router or PriceRouter()
+        ttl = ttl_seconds if ttl_seconds is not None else float(getattr(settings, "PRICE_CACHE_TTL", 5.0))
+        self.cache = TTLCache[str, Dict[str, float]](ttl_seconds=ttl)
+
+    def get_index_prices(self, symbols: List[str]) -> Dict[str, float]:
+        key = ",".join(sorted([s for s in symbols if s]))
+        cached = self.cache.get(key)
+        if cached is not None:
+            return cached
+        data = self.router.get_index_prices(symbols)
+        if data:
+            self.cache.set(key, data)
+        return data

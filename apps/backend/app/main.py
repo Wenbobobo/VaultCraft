@@ -6,8 +6,10 @@ from pathlib import Path
 
 from .metrics import compute_metrics
 from .hyper_client import HyperHTTP, DEFAULT_API
-from .price_provider import PriceRouter
+from .price_provider import PriceRouter, CachedPriceRouter
 from .hyper_exec import HyperExecClient
+from .cache import TTLCache
+from .settings import settings
 
 app = FastAPI(title="VaultCraft v0 API")
 
@@ -42,6 +44,9 @@ def api_metrics(address: str, series: Optional[str] = None):
     return compute_metrics(demo)
 
 
+_nav_cache = TTLCache[str, List[float]](ttl_seconds=float(getattr(settings, "NAV_CACHE_TTL", 2.0)))
+
+
 @app.get("/api/v1/nav/{address}")
 def api_nav(address: str, window: int = 30):
     """Return NAV series for a vault.
@@ -50,6 +55,10 @@ def api_nav(address: str, window: int = 30):
     current index prices. Series is a flat timeline using the same NAV value
     repeated, suitable for UI until storage/backfill is added.
     """
+    cache_key = f"{address}:{window}"
+    cached = _nav_cache.get(cache_key)
+    if cached is not None:
+        return {"address": address, "nav": cached}
     profiles = _demo_nav_profiles()
     profile = profiles.get(address) or profiles.get("default")
     router = PriceRouter()
@@ -60,6 +69,7 @@ def api_nav(address: str, window: int = 30):
         prices = {s: 1000.0 + 100.0 * i for i, s in enumerate(syms)}
     nav_val = HyperExecClient.pnl_to_nav(cash=profile.get("cash", 1_000_000.0), positions=profile.get("positions", {}), index_prices=prices)
     nav = [round(nav_val / profile.get("denom", 1_000_000.0), 6)] * max(1, window)
+    _nav_cache.set(cache_key, nav)
     return {"address": address, "nav": nav}
 
 
@@ -94,13 +104,15 @@ def api_markets():
     return {"pairs": _load_pairs_from_deployments()}
 
 
+_price_provider = CachedPriceRouter()
+
+
 @app.get("/api/v1/price")
 def api_price(symbols: str):
     """Return prices for given symbols, comma-separated."""
     syms = [s for s in symbols.split(",") if s]
-    router = PriceRouter()
     try:
-        prices = router.get_index_prices(syms)
+        prices = _price_provider.get_index_prices(syms)
         if not prices:
             raise RuntimeError("empty prices")
     except Exception:

@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     # Price source selection
     ENABLE_HYPER_SDK: bool = False
     PRICE_TIMEOUT: float = 5.0
+    PRICE_CACHE_TTL: float = 2.0
+    NAV_CACHE_TTL: float = 2.0
 
     class Config:
         env_file = ".env"
@@ -19,4 +21,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

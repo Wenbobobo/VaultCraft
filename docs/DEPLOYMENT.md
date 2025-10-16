@@ -4,12 +4,12 @@
 
 ---
 
-## 0. 准备环境
+## 0. 准备环境（Hyper Testnet 优先）
 
 - Node.js ≥ 18, npm ≥ 9（Windows 已就绪）
 - 测试网 RPC：
-  - Base Sepolia: https://sepolia.base.org (ChainId 84532)
-  - Arbitrum Sepolia: https://sepolia-rollup.arbitrum.io/rpc (ChainId 421614)
+  - Hyper Testnet EVM: https://rpc.hyperliquid-testnet.xyz/evm (ChainId 998)
+  - 更多参考 docs\HYPER_INTEGRATION.md, docs\HYPER_DEPLOYMENT.md
 - 部署私钥：建议新建小额热钱包，切勿使用生产私钥
 
 ---
@@ -31,10 +31,10 @@ npm install
 Copy-Item .env.example .env
 ```
 
-编辑 `.env`：
+编辑 `.env`（Hyper Testnet 推荐）：
 
 ```
-RPC_URL=https://sepolia.base.org
+HYPER_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
 PRIVATE_KEY=0xYOUR_PRIVATE_KEY
 # 可选：管理与守护者地址、是否私募、绩效费、锁定天数
 #INIT_MANAGER=0x...
@@ -46,7 +46,8 @@ PRIVATE_KEY=0xYOUR_PRIVATE_KEY
 ```
 
 网络选择说明：
-- baseSepolia / arbitrumSepolia 由 hardhat.config.ts 预置；都共用 `RPC_URL` 和 `PRIVATE_KEY`
+- hyperTestnet / baseSepolia / arbitrumSepolia 由 hardhat.config.ts 预置；
+- hyperTestnet 使用 `HYPER_RPC_URL`；其它网络可继续沿用 `RPC_URL`
 
 ---
 
@@ -61,15 +62,19 @@ npx hardhat test
 
 ## 4. 部署（后端 / 前端）
 
-Base Sepolia：
+Hyper Testnet：
+```
+npm run deploy:hyperTestnet
+```
+
+<!-- Base Sepolia：
 ```
 npm run deploy:baseSepolia
 ```
-
 Arbitrum Sepolia：
 ```
 npm run deploy:arbitrumSepolia
-```
+``` -->
 
 输出包含：
 - MockERC20 资产地址（若未提供 ASSET_ADDRESS）
