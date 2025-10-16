@@ -26,9 +26,15 @@ def test_price_cache(monkeypatch):
     assert calls["n"] == 1
 
 
-def test_nav_cache(monkeypatch):
+def test_nav_cache(monkeypatch, tmp_path):
     # Clear cache
     _nav_cache.clear()
+    # Prepare positions file with a non-empty profile
+    store = tmp_path / "positions.json"
+    monkeypatch.setenv("POSITIONS_FILE", str(store))
+    from app.positions import set_profile
+    vid = "0xcache"
+    set_profile(vid, {"cash": 1000.0, "positions": {"BTC": 1.0}, "denom": 1000.0})
     # Force deterministic prices by patching PriceRouter.get_index_prices
     calls = {"n": 0}
 
@@ -38,7 +44,6 @@ def test_nav_cache(monkeypatch):
 
     monkeypatch.setattr(PriceRouter, "get_index_prices", fake_prices)
     c = TestClient(app)
-    vid = "0x1234...5678"
     r1 = c.get(f"/api/v1/nav/{vid}", params={"window": 5})
     assert r1.status_code == 200
     nav1 = r1.json()["nav"]

@@ -7,9 +7,13 @@ from pathlib import Path
 from .metrics import compute_metrics
 from .hyper_client import HyperHTTP, DEFAULT_API
 from .price_provider import PriceRouter, CachedPriceRouter
-from .hyper_exec import HyperExecClient
+from .hyper_exec import HyperExecClient, Order
 from .cache import TTLCache
 from .settings import settings
+from .positions import get_profile
+from .snapshots import store as snapshot_store
+from .events import store as event_store
+from .exec_service import ExecService
 
 app = FastAPI(title="VaultCraft v0 API")
 
@@ -59,10 +63,16 @@ def api_nav(address: str, window: int = 30):
     cached = _nav_cache.get(cache_key)
     if cached is not None:
         return {"address": address, "nav": cached}
-    profiles = _demo_nav_profiles()
-    profile = profiles.get(address) or profiles.get("default")
+    # Prefer stored snapshots if available
+    series = snapshot_store.get(address, window=window)
+    if series:
+        nav = [round(v, 6) for (_, v) in series]
+        _nav_cache.set(cache_key, nav)
+        return {"address": address, "nav": nav}
+
+    profile = get_profile(address)
     router = PriceRouter()
-    syms = list(profile["positions"].keys()) if profile else []
+    syms = list(profile.get("positions", {}).keys()) if profile else []
     try:
         prices = router.get_index_prices(syms) if syms else {}
     except Exception:
@@ -73,16 +83,35 @@ def api_nav(address: str, window: int = 30):
     return {"address": address, "nav": nav}
 
 
+@app.post("/api/v1/nav/snapshot/{address}")
+def api_nav_snapshot(address: str, nav: float | None = None, ts: float | None = None):
+    """Create a NAV snapshot for a vault.
+
+    If `nav` is omitted, compute from positions + prices at call time.
+    """
+    if nav is None:
+        profile = get_profile(address)
+        syms = list(profile.get("positions", {}).keys()) if profile else []
+        router = PriceRouter()
+        try:
+            prices = router.get_index_prices(syms) if syms else {}
+        except Exception:
+            prices = {s: 1000.0 + 100.0 * i for i, s in enumerate(syms)}
+        nav_val = HyperExecClient.pnl_to_nav(
+            cash=profile.get("cash", 1_000_000.0),
+            positions=profile.get("positions", {}),
+            index_prices=prices,
+        )
+        nav = round(nav_val / profile.get("denom", 1_000_000.0), 6)
+    snapshot_store.add(address, float(nav), ts)
+    _nav_cache.clear()
+    return {"ok": True, "address": address, "nav": nav}
+
+
 @app.get("/api/v1/events/{address}")
-def api_events(address: str):
-    """Return recent events (placeholder). In production, chain + offchain events."""
-    return {
-        "address": address,
-        "events": [
-            {"type": "init", "ts": 0, "msg": "vault created"},
-            {"type": "param", "ts": 1, "msg": "perf_fee_bps=1000"},
-        ],
-    }
+def api_events(address: str, limit: int | None = None):
+    ev = event_store.list(address, limit=limit)
+    return {"address": address, "events": ev}
 
 
 # --- Markets & Prices ---
@@ -121,67 +150,90 @@ def api_price(symbols: str):
     return {"prices": prices}
 
 
-# --- Vaults directory (demo) ---
-def _demo_vaults() -> List[Dict[str, object]]:
-    return [
-        {
-            "id": "0x1234...5678",
-            "name": "Alpha Momentum Strategy",
-            "type": "public",
-        },
-        {
-            "id": "0x8765...4321",
-            "name": "Quant Arbitrage Fund",
-            "type": "private",
-        },
-    ]
+# --- Exec Service (dry-run env-controlled) ---
+@app.post("/api/v1/exec/open")
+def api_exec_open(symbol: str, size: float, side: str, reduce_only: bool = False, leverage: float | None = None, vault: str = "_global"):
+    svc = ExecService()
+    return svc.open(vault, Order(symbol=symbol, size=size, side=side, reduce_only=reduce_only, leverage=leverage))
 
 
-def _demo_nav_profiles() -> Dict[str, Dict[str, object]]:
-    """Cash + positions profile for demo NAV computation.
+@app.post("/api/v1/exec/close")
+def api_exec_close(symbol: str, size: float | None = None, vault: str = "_global"):
+    svc = ExecService()
+    return svc.close(vault, symbol=symbol, size=size)
 
-    denom: normalize NAV to unit value (e.g., total shares or initial AUM)
-    """
-    return {
-        "0x1234...5678": {
-            "cash": 1_000_000.0,
-            "positions": {"BTC": 0.1, "ETH": 2.0},
-            "denom": 1_000_000.0,
-        },
-        "0x8765...4321": {
-            "cash": 500_000.0,
-            "positions": {"BTC": -0.05, "ETH": 1.0},
-            "denom": 500_000.0,
-        },
-        "default": {
-            "cash": 1_000_000.0,
-            "positions": {"BTC": 0.0, "ETH": 0.0},
-            "denom": 1_000_000.0,
-        },
-    }
+
+# --- Vaults registry (derive from deployments & positions) ---
+def _vault_registry() -> List[Dict[str, object]]:
+    out: Dict[str, Dict[str, object]] = {}
+    # 1) positions.json keys → default private vaults
+    try:
+        pos_path = os.getenv("POSITIONS_FILE") or str(Path("deployments") / "positions.json")
+        if Path(pos_path).exists():
+            data = json.loads(Path(pos_path).read_text() or "{}")
+            if isinstance(data, dict):
+                for vid in data.keys():
+                    if isinstance(vid, str):
+                        out[vid] = {
+                            "id": vid,
+                            "name": f"Vault {vid}",
+                            "type": "private",
+                        }
+    except Exception:
+        pass
+    # 2) deployments/hyper-testnet.json vault → prefer public entry if present
+    try:
+        d = Path("deployments") / "hyper-testnet.json"
+        if d.exists():
+            meta = json.loads(d.read_text() or "{}")
+            vid = meta.get("vault")
+            if isinstance(vid, str) and vid:
+                out[vid] = {"id": vid, "name": "VaultCraft (Hyper Testnet)", "type": "public"}
+    except Exception:
+        pass
+    # fallback demo if empty
+    if not out:
+        return [
+            {"id": "0x1234...5678", "name": "Alpha Momentum Strategy", "type": "public"},
+            {"id": "0x8765...4321", "name": "Quant Arbitrage Fund", "type": "private"},
+        ]
+    return list(out.values())
+
+
+# demo profiles were replaced by file-backed store (deployments/positions.json)
 
 
 @app.get("/api/v1/vaults")
 def api_vaults():
-    return {"vaults": _demo_vaults()}
+    return {"vaults": _vault_registry()}
 
 
 @app.get("/api/v1/vaults/{vault_id}")
 def api_vault_detail(vault_id: str):
-    # basic info from demo list
-    info = next((v for v in _demo_vaults() if v["id"] == vault_id), None)
+    # basic info from registry
+    info = next((v for v in _vault_registry() if v["id"] == vault_id), None)
     if info is None:
         info = {"id": vault_id, "name": "Vault", "type": "private"}
-    # demo NAV
-    nav_series = api_nav(vault_id, window=60)["nav"]
+    # compute NAV + metrics
+    profile = get_profile(vault_id)
+    syms = list(profile.get("positions", {}).keys()) if profile else []
+    try:
+        prices = _price_provider.get_index_prices(syms) if syms else {}
+    except Exception:
+        prices = {s: 1000.0 + 100.0 * i for i, s in enumerate(syms)}
+    nav_val = HyperExecClient.pnl_to_nav(
+        cash=profile.get("cash", 1_000_000.0), positions=profile.get("positions", {}), index_prices=prices
+    )
+    unit_nav = round(nav_val / profile.get("denom", 1_000_000.0), 6)
+    nav_series = [unit_nav] * 60
     m = compute_metrics(nav_series)
     return {
         **info,
         "metrics": m,
-        "unitNav": nav_series[-1] if nav_series else 1.0,
+        "unitNav": unit_nav,
         "lockDays": 1,
         "performanceFee": 10,
         "managementFee": 0,
-        "aum": 1_000_000,
-        "totalShares": 1_000_000,
+        "aum": int(nav_val),
+        "totalShares": int(profile.get("denom", 1_000_000.0)),
     }

@@ -7,6 +7,7 @@ from typing import Dict
 
 from .hyper_client import HyperHTTP, DEFAULT_API, DEFAULT_RPC
 from .hyper_exec import HyperExecClient, Order
+from .positions import get_profile, set_profile
 
 
 def cmd_rpc_ping(args: argparse.Namespace) -> None:
@@ -70,10 +71,29 @@ def main() -> None:
     p4.add_argument("--prices", required=True, help='JSON dict, e.g. {"ETH":3000,"BTC":60000}')
     p4.set_defaults(func=cmd_nav)
 
+    # positions:get
+    def cmd_positions_get(args: argparse.Namespace) -> None:
+        prof = get_profile(args.vault)
+        print(json.dumps(prof, indent=2))
+
+    p5 = sub.add_parser("positions:get", help="Get positions profile for a vault (cash, positions, denom)")
+    p5.add_argument("vault")
+    p5.set_defaults(func=cmd_positions_get)
+
+    # positions:set
+    def cmd_positions_set(args: argparse.Namespace) -> None:
+        profile = json.loads(args.profile)
+        set_profile(args.vault, profile)
+        print(json.dumps({"ok": True}, indent=2))
+
+    p6 = sub.add_parser("positions:set", help="Set positions profile JSON for a vault")
+    p6.add_argument("vault")
+    p6.add_argument("profile", help='JSON, e.g. {"cash":1000000,"positions":{"BTC":0.1,"ETH":2.0},"denom":1000000}')
+    p6.set_defaults(func=cmd_positions_set)
+
     args = parser.parse_args()
     args.func(args)
 
 
 if __name__ == "__main__":
     main()
-

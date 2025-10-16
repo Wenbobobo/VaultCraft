@@ -1,7 +1,10 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import * as dotenv from "dotenv";
-dotenv.config();
+import * as path from "path";
+// Load root .env then local .env to allow overrides
+dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 import "solidity-coverage";
 import "./tasks/vault";
 

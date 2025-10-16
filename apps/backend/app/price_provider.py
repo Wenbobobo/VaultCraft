@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Dict, List
+import time
 
 from .hyper_client import HyperHTTP
 from .settings import Settings, settings
@@ -88,13 +89,38 @@ class CachedPriceRouter(PriceProvider):
         self.router = router or PriceRouter()
         ttl = ttl_seconds if ttl_seconds is not None else float(getattr(settings, "PRICE_CACHE_TTL", 5.0))
         self.cache = TTLCache[str, Dict[str, float]](ttl_seconds=ttl)
+        self.last_good: Dict[str, Dict[str, float]] = {}
 
     def get_index_prices(self, symbols: List[str]) -> Dict[str, float]:
         key = ",".join(sorted([s for s in symbols if s]))
         cached = self.cache.get(key)
         if cached is not None:
             return cached
-        data = self.router.get_index_prices(symbols)
+        attempts = int(getattr(settings, "PRICE_RETRIES", 1)) + 1
+        backoff = float(getattr(settings, "PRICE_RETRY_BACKOFF_SEC", 0.2))
+        last_err: Exception | None = None
+        data: Dict[str, float] | None = None
+        for i in range(attempts):
+            try:
+                data = self.router.get_index_prices(symbols)
+                break
+            except Exception as e:
+                last_err = e
+                if i < attempts - 1:
+                    try:
+                        time.sleep(backoff * (2 ** i))
+                    except Exception:
+                        pass
+        if data is None or not data:
+            # return last_good if available
+            lg = self.last_good.get(key)
+            if lg:
+                return lg
+            # propagate last error for outer handler
+            if last_err:
+                raise last_err
+            return {}
         if data:
             self.cache.set(key, data)
+            self.last_good[key] = data
         return data

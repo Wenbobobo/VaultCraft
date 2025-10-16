@@ -89,6 +89,25 @@ Demo Registry（演示金库目录）：
 - 后续版本会将注册表迁移到轻量数据库或链上事件索引，保持接口不变
   - Demo NAV 计算：后端内置两个示例地址 `0x1234...5678` 与 `0x8765...4321` 的现金+头寸配置，用于 `/api/v1/nav/:id` 计算演示 NAV；也可直接传入任意地址按默认配置计算
 
+维护头寸（Positions）用于 NAV 计算：
+- 文件：`deployments/positions.json`（可通过环境变量 `POSITIONS_FILE` 指定路径）
+- 结构示例：
+```
+{
+  "0x1234...5678": {
+    "cash": 1000000,
+    "positions": { "BTC": 0.1, "ETH": 2.0 },
+    "denom": 1000000
+  }
+}
+```
+- CLI 管理：
+```
+cd apps/backend
+uv run python -m app.cli positions:get 0x1234...5678
+uv run python -m app.cli positions:set 0x1234...5678 '{"cash":1000000,"positions":{"BTC":0.2},"denom":1000000}'
+```
+
 ---
 
 ## 6. 注意事项
