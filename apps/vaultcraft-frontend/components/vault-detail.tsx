@@ -8,10 +8,11 @@ import { Lock, Eye, TrendingUp, TrendingDown, ArrowUpRight, Wallet } from "lucid
 import { PerformanceChart } from "@/components/performance-chart"
 import { DepositModal } from "@/components/deposit-modal"
 import { useEffect, useMemo, useState } from "react"
-import { getNav, getVault } from "@/lib/api"
+import { getVault } from "@/lib/api"
 import { useOnchainVault } from "@/hooks/use-onchain-vault"
 import { ExecPanel } from "@/components/exec-panel"
 import { EventsFeed } from "@/components/events-feed"
+import { useNavSeries } from "@/hooks/use-nav-series"
 
 type UIState = {
   id: string
@@ -54,6 +55,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
   const [vault, setVault] = useState<UIState>(fallbackVault)
   const [navData, setNavData] = useState<number[]>([])
   const chain = useOnchainVault(vaultId)
+  const nav = useNavSeries(vaultId, 5000, 180)
 
   useEffect(() => {
     let alive = true
@@ -80,27 +82,25 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
         setVault(ui)
       })
       .catch(() => {})
-    getNav(vaultId, 90)
-      .then((series) => {
-        if (!alive) return
-        setNavData(series)
-      })
-      .catch(() => {})
     return () => {
       alive = false
     }
   }, [vaultId])
 
   const chartPoints = useMemo(() => {
+    if (nav.series.length) {
+      return nav.series.map((p) => ({
+        date: new Date(p.ts * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        nav: p.nav,
+      }))
+    }
+    // fallback to initial data
     const now = Date.now()
     return navData.map((v, i, arr) => ({
-      date: new Date(now - (arr.length - 1 - i) * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
+      date: new Date(now - (arr.length - 1 - i) * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       nav: v,
     }))
-  }, [navData])
+  }, [nav.series, navData])
 
   return (
     <>

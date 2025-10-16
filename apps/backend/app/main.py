@@ -15,6 +15,8 @@ from .snapshots import store as snapshot_store
 from .events import store as event_store
 from .exec_service import ExecService
 from .daemon import SnapshotDaemon
+from .user_listener import UserEventsListener
+from .hyper_client import HyperHTTP
 
 app = FastAPI(title="VaultCraft v0 API")
 
@@ -22,6 +24,26 @@ app = FastAPI(title="VaultCraft v0 API")
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/api/v1/status")
+def api_status():
+    # Sanitize settings for FE/ops visibility
+    flags = {
+        "enable_sdk": bool(getattr(settings, "ENABLE_HYPER_SDK", False)),
+        "enable_live_exec": bool(getattr(settings, "ENABLE_LIVE_EXEC", False)),
+        "enable_user_ws": bool(getattr(settings, "ENABLE_USER_WS_LISTENER", False)),
+        "enable_snapshot_daemon": bool(getattr(settings, "ENABLE_SNAPSHOT_DAEMON", False)),
+        "address": getattr(settings, "ADDRESS", None),
+        "allowed_symbols": getattr(settings, "EXEC_ALLOWED_SYMBOLS", ""),
+    }
+    try:
+        http = HyperHTTP()
+        info = http.rpc_ping()
+        rpc = {"rpc": http.rpc_url, "chainId": info.chain_id, "block": info.block_number}
+    except Exception:
+        rpc = {"rpc": getattr(settings, "HYPER_RPC_URL", None), "chainId": None, "block": None}
+    return {"ok": True, "flags": flags, "network": rpc}
 
 
 @app.post("/metrics")
@@ -175,6 +197,16 @@ def api_exec_close(symbol: str, size: float | None = None, vault: str = "_global
     return svc.close(vault, symbol=symbol, size=size)
 
 
+@app.get("/api/v1/pretrade")
+def api_pretrade(symbol: str, size: float, side: str, reduce_only: bool = False, leverage: float | None = None):
+    svc = ExecService()
+    try:
+        svc._validate(Order(symbol=symbol, size=size, side=side, reduce_only=reduce_only, leverage=leverage))
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 # --- Vaults registry (derive from deployments & positions) ---
 def _vault_registry() -> List[Dict[str, object]]:
     out: Dict[str, Dict[str, object]] = {}
@@ -270,23 +302,33 @@ def api_positions_set(vault_id: str, profile: Dict[str, object]):
     # only confirm set; nav is computed via dedicated endpoints with live prices
     return {"ok": True}
 _snapshot_daemon: SnapshotDaemon | None = None
+_user_listener: UserEventsListener | None = None
 
 
 @app.on_event("startup")
 def _startup():
-    global _snapshot_daemon
+    global _snapshot_daemon, _user_listener
     if settings.ENABLE_SNAPSHOT_DAEMON:
         def list_ids() -> List[str]:
             return [v["id"] for v in _vault_registry()]
         _snapshot_daemon = SnapshotDaemon(list_vaults=list_ids, interval_sec=float(settings.SNAPSHOT_INTERVAL_SEC))
         _snapshot_daemon.start()
+    if settings.ENABLE_LIVE_EXEC and settings.ENABLE_USER_WS_LISTENER:
+        # Use ADDRESS as the logical vault id; for multi-vault setups, consider per-vault routing
+        _user_listener = UserEventsListener(vault=settings.ADDRESS or "_global")
+        _user_listener.start()
 
 
 @app.on_event("shutdown")
 def _shutdown():
-    global _snapshot_daemon
+    global _snapshot_daemon, _user_listener
     try:
         if _snapshot_daemon:
             _snapshot_daemon.stop()
+    except Exception:
+        pass
+    try:
+        if _user_listener:
+            _user_listener.stop()
     except Exception:
         pass

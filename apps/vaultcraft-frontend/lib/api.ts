@@ -42,6 +42,18 @@ export async function getNav(id: string, window = 60): Promise<number[]> {
   return data.nav || [];
 }
 
+export type NavPoint = { ts: number; nav: number }
+
+export async function getNavSeries(id: string, opts?: { since?: number; window?: number }): Promise<NavPoint[]> {
+  const qs: string[] = []
+  if (opts?.since !== undefined) qs.push(`since=${opts.since}`)
+  if (opts?.window !== undefined) qs.push(`window=${opts.window}`)
+  const r = await fetch(`${BACKEND_URL}/api/v1/nav_series/${id}${qs.length ? `?${qs.join("&")}` : ""}`, { cache: "no-store" })
+  if (!r.ok) throw new Error("nav series fetch failed")
+  const data = await r.json()
+  return data.series || []
+}
+
 export async function getMetrics(id: string, series?: number[]): Promise<VaultDetail["metrics"]> {
   if (series && series.length > 1) {
     const qs = series.join(",");

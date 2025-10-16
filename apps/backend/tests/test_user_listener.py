@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+from app.user_listener import _extract_fills, process_user_event
+from app.positions import get_profile
+
+
+def test_extract_fills_various_shapes():
+    cases = [
+        {"fills": [{"name": "ETH", "dir": True, "sz": 0.1}]},
+        {"fills": [{"symbol": "BTC", "is_buy": False, "size": 0.2}]},
+        {"name": "ETH", "side": "buy", "qty": 0.3},
+    ]
+    outs = [_extract_fills(c) for c in cases]
+    flat = [x for arr in outs for x in arr]
+    # Should have ETH buy 0.1, BTC sell 0.2, ETH buy 0.3
+    assert ("ETH", "buy", 0.1) in flat
+    assert any(t[0] == "BTC" and t[1] == "sell" and abs(t[2] - 0.2) < 1e-9 for t in flat)
+    assert ("ETH", "buy", 0.3) in flat
+
+
+def test_process_user_event_applies(monkeypatch, tmp_path):
+    monkeypatch.setenv("POSITIONS_FILE", str(tmp_path / "positions.json"))
+    vid = "0xUL"
+    evt = {"fills": [{"name": "ETH", "dir": True, "sz": 1.0}]}
+    process_user_event(vid, evt)
+    prof = get_profile(vid)
+    assert abs(prof["positions"].get("ETH", 0.0) - 1.0) < 1e-9
+

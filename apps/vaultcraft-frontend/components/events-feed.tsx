@@ -53,12 +53,17 @@ export function EventsFeed({ vaultId }: { vaultId: string }) {
         {items.map((e, i) => (
           <div key={i} className="text-xs border border-border/40 rounded p-2 flex items-start justify-between">
             <div>
-              <div className="font-mono">{e.type}{e.status ? ` • ${e.status}` : ""}</div>
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-full ${e.type?.startsWith('exec') ? 'bg-blue-500/10 text-blue-300' : e.type === 'fill' ? 'bg-green-500/10 text-green-300' : 'bg-zinc-500/10 text-zinc-300'}`}>{e.type}</span>
+                {e.status && (
+                  <span className={`px-2 py-0.5 rounded-full ${e.status === 'ack' ? 'bg-green-500/10 text-green-300' : e.status === 'dry_run' ? 'bg-yellow-500/10 text-yellow-300' : e.status === 'rejected' ? 'bg-red-500/10 text-red-300' : 'bg-zinc-500/10 text-zinc-300'}`}>{e.status}</span>
+                )}
+              </div>
               {e.symbol && (
-                <div className="text-muted-foreground">{e.symbol} {e.side} {e.size ?? ""}</div>
+                <div className="text-muted-foreground mt-1">{e.symbol} {e.side} {e.size ?? ""}</div>
               )}
               {e.error && (
-                <div className="text-destructive">{e.error}</div>
+                <div className="text-destructive mt-1">{e.error}</div>
               )}
             </div>
             <div className="text-muted-foreground">{e.ts ? new Date(e.ts * 1000).toLocaleTimeString() : ""}</div>
@@ -68,4 +73,3 @@ export function EventsFeed({ vaultId }: { vaultId: string }) {
     </div>
   )
 }
-

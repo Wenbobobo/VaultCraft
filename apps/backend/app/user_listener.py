@@ -1,0 +1,134 @@
+from __future__ import annotations
+
+import threading
+from typing import Any, Dict, List, Tuple
+
+from .settings import Settings
+from .positions import apply_fill
+from .navcalc import snapshot_now
+from .events import store as event_store
+
+
+def _extract_fills(evt: Dict[str, Any]) -> List[Tuple[str, str, float]]:
+    """Best-effort extraction of fills from a Hyper user event.
+
+    Returns list of (symbol, side, size). side is 'buy' or 'sell'.
+    Accepts multiple shapes to keep tests offline and robust to minor SDK changes.
+    """
+    out: List[Tuple[str, str, float]] = []
+    # Common shapes
+    if isinstance(evt.get("fills"), list):
+        for f in evt["fills"]:
+            name = str(f.get("name") or f.get("symbol") or f.get("coin") or "")
+            sz = f.get("sz") or f.get("size") or f.get("qty") or 0.0
+            side = f.get("side")
+            if side is None:
+                is_buy = f.get("dir") or f.get("is_buy")
+                side = "buy" if bool(is_buy) else "sell"
+            try:
+                s = float(sz)
+            except Exception:
+                continue
+            if name and s > 0:
+                out.append((name, side, s))
+    else:
+        # Single fill event
+        name = str(evt.get("name") or evt.get("symbol") or evt.get("coin") or "")
+        sz = evt.get("sz") or evt.get("size") or evt.get("qty") or 0.0
+        side = evt.get("side")
+        if side is None:
+            is_buy = evt.get("dir") or evt.get("is_buy")
+            side = "buy" if bool(is_buy) else "sell"
+        try:
+            s = float(sz)
+        except Exception:
+            s = 0.0
+        if name and s > 0:
+            out.append((name, side, s))
+    return out
+
+
+def process_user_event(vault: str, evt: Dict[str, Any]) -> None:
+    """Apply user event fills to positions, snapshot NAV, and log events."""
+    fills = _extract_fills(evt)
+    if not fills:
+        return
+    for name, side, sz in fills:
+        try:
+            apply_fill(vault, name, sz, side)
+            unit = snapshot_now(vault)
+            event_store.add(vault, {"type": "fill", "status": "applied", "symbol": name, "side": side, "size": sz, "unitNav": unit})
+        except Exception as e:
+            event_store.add(vault, {"type": "fill", "status": "error", "error": str(e), "symbol": name})
+
+
+class UserEventsListener:
+    def __init__(self, vault: str):
+        self._vault = vault
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._info = None
+
+    def _ensure_info(self):
+        if self._info is not None:
+            return self._info
+        env = Settings()
+        try:
+            from hyperliquid.info import Info  # type: ignore
+            from hyperliquid.utils.types import UserEventsSubscription  # type: ignore
+        except Exception as e:  # pragma: no cover
+            raise RuntimeError("hyperliquid SDK not available for listener") from e
+        info = Info(base_url=env.HYPER_API_URL, skip_ws=False, timeout=10)
+        self._Info = Info
+        self._UserEventsSubscription = UserEventsSubscription
+        self._info = info
+        return info
+
+    def _callback(self, msg: Any):
+        try:
+            if isinstance(msg, dict):
+                process_user_event(self._vault, msg)
+            elif isinstance(msg, list):
+                for item in msg:
+                    if isinstance(item, dict):
+                        process_user_event(self._vault, item)
+        except Exception:
+            pass
+
+    def start(self):
+        if self._thread and self._thread.is_alive():
+            return
+        env = Settings()
+        if not (env.ENABLE_LIVE_EXEC and env.ENABLE_USER_WS_LISTENER):
+            return
+        sub_user = env.ADDRESS or ""
+        # Start thread to manage subscription with simple reconnect
+        def run():
+            backoff = 1.0
+            while not self._stop.is_set():
+                try:
+                    info = self._ensure_info()
+                    sub = self._UserEventsSubscription(user=sub_user)
+                    info.subscribe(sub, self._callback)
+                    # Main loop
+                    backoff = 1.0
+                    while not self._stop.is_set():
+                        self._stop.wait(1.0)
+                    # on stop, disconnect
+                    try:
+                        info.disconnect_websocket()
+                    except Exception:
+                        pass
+                except Exception:
+                    # reconnect with capped backoff
+                    self._stop.wait(backoff)
+                    backoff = min(backoff * 2.0, 30.0)
+                    self._info = None
+        self._stop.clear()
+        self._thread = threading.Thread(target=run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=1.0)

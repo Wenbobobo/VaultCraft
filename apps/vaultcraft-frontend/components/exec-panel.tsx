@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { BACKEND_URL } from "@/lib/config"
 import { Button } from "@/components/ui/button"
 
 export function ExecPanel({ vaultId }: { vaultId: string }) {
@@ -14,6 +15,18 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
     setBusy(true)
     setMsg(null)
     try {
+      // pretrade check
+      const pre = new URLSearchParams()
+      pre.set("symbol", symbol)
+      pre.set("size", size)
+      pre.set("side", path.includes("open") ? side : "close")
+      const preUrl = `${BACKEND_URL}/api/v1/pretrade?${pre.toString()}`
+      const pr = await fetch(preUrl)
+      const pj = await pr.json()
+      if (!pj.ok) {
+        setMsg(`Rejected: ${pj.error || "pretrade failed"}`)
+        return
+      }
       const params = new URLSearchParams()
       params.set("vault", vaultId)
       params.set("symbol", symbol)
@@ -23,7 +36,7 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
       } else {
         params.set("size", size)
       }
-      const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}${path}?${params.toString()}`
+      const url = `${BACKEND_URL}${path}?${params.toString()}`
       const r = await fetch(url, { method: "POST" })
       const body = await r.json()
       setMsg(JSON.stringify(body))
@@ -56,4 +69,3 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
     </div>
   )
 }
-
