@@ -1,0 +1,63 @@
+import { BACKEND_URL } from "@/lib/config";
+
+export type VaultSummary = {
+  id: string;
+  name: string;
+  type: "public" | "private";
+  aum?: number;
+};
+
+export type VaultDetail = VaultSummary & {
+  unitNav: number;
+  lockDays: number;
+  performanceFee: number;
+  managementFee: number;
+  totalShares: number;
+  metrics: {
+    ann_return: number;
+    ann_vol: number;
+    sharpe: number;
+    mdd: number;
+    recovery_days: number;
+  };
+};
+
+export async function getVaults(): Promise<VaultSummary[]> {
+  const r = await fetch(`${BACKEND_URL}/api/v1/vaults`, { cache: "no-store" });
+  if (!r.ok) throw new Error("vaults fetch failed");
+  const data = await r.json();
+  return data.vaults || [];
+}
+
+export async function getVault(id: string): Promise<VaultDetail> {
+  const r = await fetch(`${BACKEND_URL}/api/v1/vaults/${id}`, { cache: "no-store" });
+  if (!r.ok) throw new Error("vault detail fetch failed");
+  return await r.json();
+}
+
+export async function getNav(id: string, window = 60): Promise<number[]> {
+  const r = await fetch(`${BACKEND_URL}/api/v1/nav/${id}?window=${window}`, { cache: "no-store" });
+  if (!r.ok) throw new Error("nav fetch failed");
+  const data = await r.json();
+  return data.nav || [];
+}
+
+export async function getMetrics(id: string, series?: number[]): Promise<VaultDetail["metrics"]> {
+  if (series && series.length > 1) {
+    const qs = series.join(",");
+    const r = await fetch(`${BACKEND_URL}/api/v1/metrics/${id}?series=${qs}`, { cache: "no-store" });
+    if (!r.ok) throw new Error("metrics fetch failed");
+    return await r.json();
+  }
+  const r = await fetch(`${BACKEND_URL}/api/v1/metrics/${id}`, { cache: "no-store" });
+  if (!r.ok) throw new Error("metrics fetch failed");
+  return await r.json();
+}
+
+export async function getPrices(symbols: string[]): Promise<Record<string, number>> {
+  const r = await fetch(`${BACKEND_URL}/api/v1/price?symbols=${symbols.join(",")}`, { cache: "no-store" });
+  if (!r.ok) throw new Error("price fetch failed");
+  const data = await r.json();
+  return data.prices || {};
+}
+

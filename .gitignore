@@ -51,5 +51,4 @@ npm-debug.log*
 *.exe
 log.txt
 *.pdf
-vaultcraft-frontend/
 .coverage
