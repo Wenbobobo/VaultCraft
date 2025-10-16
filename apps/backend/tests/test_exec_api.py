@@ -11,6 +11,7 @@ def test_exec_open_dry_run(tmp_path, monkeypatch):
     # Isolate positions store
     store = tmp_path / "positions.json"
     monkeypatch.setenv("POSITIONS_FILE", str(store))
+    monkeypatch.setenv("ENABLE_LIVE_EXEC", "0")
     c = TestClient(app)
     # direct call, validation will use defaults (ETH allowed, large limits)
     r = c.post("/api/v1/exec/open", params={"symbol": "ETH", "size": 1.0, "side": "buy", "reduce_only": True, "leverage": 5, "vault": "0xv"})
@@ -27,6 +28,7 @@ def test_exec_open_dry_run(tmp_path, monkeypatch):
 def test_exec_close_dry_run(tmp_path, monkeypatch):
     store = tmp_path / "positions.json"
     monkeypatch.setenv("POSITIONS_FILE", str(store))
+    monkeypatch.setenv("ENABLE_LIVE_EXEC", "0")
     c = TestClient(app)
     # seed an open first
     c.post("/api/v1/exec/open", params={"symbol": "ETH", "size": 1.0, "side": "buy", "vault": "0xv"})

@@ -7,6 +7,7 @@ from app.hyper_exec import Order
 def test_exec_validation_symbol_and_notional(monkeypatch, tmp_path):
     # Isolate positions file
     monkeypatch.setenv("POSITIONS_FILE", str(tmp_path / "positions.json"))
+    monkeypatch.setenv("ENABLE_LIVE_EXEC", "0")
     # Restrict to ETH only and tiny max notional
     from app import settings as settings_mod
     monkeypatch.setenv("EXEC_ALLOWED_SYMBOLS", "ETH")

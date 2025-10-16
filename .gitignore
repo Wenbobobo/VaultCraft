@@ -53,3 +53,4 @@ log.txt
 *.pdf
 .coverage
 *.tar
+error.txt

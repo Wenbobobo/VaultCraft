@@ -19,14 +19,20 @@ npm run ping:hyper
 
 ---
 
-## 2. 环境变量（后端）
+## 2. 统一环境变量（根 .env）
 
-- `HYPER_RPC_URL`（可选，默认上面 Testnet RPC）
-- `HYPER_API_URL`（默认 Testnet REST）
-- `HYPER_API_KEY` / `HYPER_API_SECRET`（如需私有接口/服务账号）
-- `ENABLE_HYPER_SDK`（默认 false）：启用官方 Python SDK 作为行情优先数据源（只读）
-- `PRICE_TIMEOUT`（默认 5s）：行情请求超时
-- 其他：`EXEC_LIMITS`（额度/频次/白名单），按需定义
+- `HYPER_RPC_URL`：Testnet EVM RPC（https://rpc.hyperliquid-testnet.xyz/evm）
+- `HYPER_API_URL`：Testnet REST（https://api.hyperliquid-testnet.xyz）
+- `PRIVATE_KEY` 或 `HYPER_TRADER_PRIVATE_KEY`：实单私钥（小额）
+- `ADDRESS`：监听用户事件所需（可选）
+- `ENABLE_HYPER_SDK`：SDK 优先行情（只读）
+- `ENABLE_LIVE_EXEC`：实单开关（默认 0，开启前务必小额）
+- `ENABLE_USER_WS_LISTENER`：用户事件监听回写（默认 0）
+- `ENABLE_SNAPSHOT_DAEMON` / `SNAPSHOT_INTERVAL_SEC`：后台快照
+- `EXEC_ALLOWED_SYMBOLS`、`EXEC_MIN/MAX_LEVERAGE`、`EXEC_MAX_NOTIONAL_USD`：风控
+- `APPLY_DRY_RUN_TO_POSITIONS` / `APPLY_LIVE_TO_POSITIONS`：是否回写头寸
+- `POSITIONS_FILE`：头寸文件路径
+- `EVENT_LOG_FILE`：事件日志（JSONL追加写）
 
 启用 SDK（推荐）步骤：
 ```
@@ -41,7 +47,7 @@ $env:ENABLE_HYPER_SDK="1"
 
 ---
 
-## 3. 后端与 Demo CLI（只读/干运行）
+## 3. 后端与 Demo CLI（只读/实单）
 
 运行（Windows PowerShell）：
 ```
@@ -54,6 +60,9 @@ uv run python -m app.cli rpc-ping
 uv run python -m app.cli build-open ETH 0.1 buy --leverage 5
 uv run python -m app.cli build-close ETH --size 0.1
 uv run python -m app.cli nav --cash 1000 --positions '{"ETH":0.2,"BTC":-0.1}' --prices '{"ETH":3000,"BTC":60000}'
+# Exec（默认 dry-run；设置 ENABLE_LIVE_EXEC=1 后走实单）
+uv run python -m app.cli exec-open 0xYourVault ETH 0.1 buy --reduce
+uv run python -m app.cli exec-close 0xYourVault ETH --size 0.1
 ```
 
 说明：
@@ -77,11 +86,11 @@ uv run python -m app.cli nav --cash 1000 --positions '{"ETH":0.2,"BTC":-0.1}' --
 
 ---
 
-## 5. 与合约/前端联动
+## 5. 与前端联动
 
 - 合约：Vault 在 Base 或 HyperEVM 部署，前端读链（ps/totalAssets/isPrivate/lock/perfFeeP）
-- 前端：私募仅显示 NAV/PnL（不显示持仓）；公募显示持仓（如接入 Adapter）
-- 后端：聚合 NAV 与指标，前端调用展示
+- 前端：/vault/[id] 展示 KPI、NAV 曲线与事件流；可选 Exec 面板（NEXT_PUBLIC_ENABLE_DEMO_TRADING=1）
+- 后端：聚合 NAV 与指标，并提供 /pretrade 与 /status 便于风控与可视化
 
 Demo Registry（演示金库目录）：
 - 当前 `/api/v1/vaults` 返回内置的演示列表（私募/公募若干）用于前端渲染

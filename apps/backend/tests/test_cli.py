@@ -44,6 +44,8 @@ def test_cmd_rpc_ping(monkeypatch, capsys):
 def test_cli_exec_open_close_dry_run(monkeypatch, capsys, tmp_path):
     # Isolate positions
     monkeypatch.setenv("POSITIONS_FILE", str(tmp_path / "positions.json"))
+    # Force dry-run regardless of env
+    monkeypatch.setenv("ENABLE_LIVE_EXEC", "0")
     # Run exec-open
     argv_backup = sys.argv
     try:

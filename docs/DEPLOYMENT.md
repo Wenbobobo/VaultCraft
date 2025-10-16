@@ -4,7 +4,7 @@
 
 ---
 
-## 0. 准备环境（Hyper Testnet 优先）
+## 0. 准备环境（Hyper Testnet）
 
 - Node.js ≥ 18, npm ≥ 9（Windows 已就绪）
 - 测试网 RPC：
@@ -31,11 +31,27 @@ npm install
 Copy-Item .env.example .env
 ```
 
-编辑 `.env`（Hyper Testnet 推荐）：
+编辑根目录 `.env`：
 
 ```
 HYPER_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
-PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+HYPER_API_URL=https://api.hyperliquid-testnet.xyz
+PRIVATE_KEY=0xYOUR_TESTNET_PRIVATE_KEY
+# 注意：必须是 0x 前缀 + 64 个十六进制字符（32 字节）。从钱包（如 MetaMask）导出账户私钥，不要填助记词或 API Secret。
+ADDRESS=0xYourAddress
+ENABLE_HYPER_SDK=1                    # SDK优先行情（只读）
+ENABLE_LIVE_EXEC=0                    # 实单开关，默认0（干运行）
+ENABLE_USER_WS_LISTENER=0            # 可选：用户事件监听回写（需ADDRESS）
+ENABLE_SNAPSHOT_DAEMON=0             # 可选：后台定时快照
+SNAPSHOT_INTERVAL_SEC=15
+EXEC_ALLOWED_SYMBOLS=BTC,ETH
+EXEC_MIN_LEVERAGE=1.0
+EXEC_MAX_LEVERAGE=50.0
+EXEC_MAX_NOTIONAL_USD=1000000000
+APPLY_DRY_RUN_TO_POSITIONS=1
+APPLY_LIVE_TO_POSITIONS=1
+POSITIONS_FILE=deployments/positions.json
+EVENT_LOG_FILE=logs/events.jsonl
 # 可选：管理与守护者地址、是否私募、绩效费、锁定天数
 #INIT_MANAGER=0x...
 #INIT_GUARDIAN=0x...
@@ -62,10 +78,14 @@ npx hardhat test
 
 ## 4. 部署（后端 / 前端）
 
-Hyper Testnet：
+部署到 Hyper Testnet：
 ```
 npm run deploy:hyperTestnet
 ```
+
+排错：
+- 报错 “private key too short, expected 32 bytes”：说明 PRIVATE_KEY 格式不正确。请确保为 0x+64hex（无引号/空格），或在 MetaMask 中导出该账户私钥重新复制。
+- 本仓库 Hardhat 会自动忽略无效 PRIVATE_KEY 以避免测试失败，但部署需要一个有效私钥。
 
 <!-- Base Sepolia：
 ```
@@ -77,17 +97,20 @@ npm run deploy:arbitrumSepolia
 ``` -->
 
 输出包含：
+
+
 - MockERC20 资产地址（若未提供 ASSET_ADDRESS）
 - Vault 合约地址（admin=deployer, manager=INIT_MANAGER, guardian=INIT_GUARDIAN）
 
 ---
 
-### 4.1 后端（只读 API）
+### 4.1 后端（只读/实单 API）
 
 ```
 cd apps/backend
 uv venv
 uv run uvicorn app.main:app --reload --port 8000
+# 实单联调：编辑根 .env 将 ENABLE_LIVE_EXEC=1；可选开启 ENABLE_USER_WS_LISTENER=1
 ```
 
 常用：
@@ -108,8 +131,9 @@ pnpm dev
 ```
 
 页面：
-- `/` Discover：展示公募/私募金库列表（默认从后端 API 获取，失败回退本地示例）
-- `/vault/[id]`：展示 KPI 与 NAV 曲线（调用后端 metrics/nav 接口）
+- `/` Discover：展示金库列表（默认通过后端 API 获取）
+- `/vault/[id]`：展示 KPI 与 NAV 曲线与事件流（/nav_series 与 /events）
+- 可选 Exec 面板：设置 `NEXT_PUBLIC_ENABLE_DEMO_TRADING=1` 后可发起 open/close（默认 dry-run）
 
 ## 4.3 快速创建私募金库（Task）
 
