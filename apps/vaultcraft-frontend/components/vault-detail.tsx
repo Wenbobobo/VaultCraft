@@ -10,6 +10,8 @@ import { DepositModal } from "@/components/deposit-modal"
 import { useEffect, useMemo, useState } from "react"
 import { getNav, getVault } from "@/lib/api"
 import { useOnchainVault } from "@/hooks/use-onchain-vault"
+import { ExecPanel } from "@/components/exec-panel"
+import { EventsFeed } from "@/components/events-feed"
 
 type UIState = {
   id: string
@@ -161,6 +163,9 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
               <TabsTrigger value="holdings">Holdings</TabsTrigger>
               <TabsTrigger value="transactions">Transactions</TabsTrigger>
               <TabsTrigger value="info">Info</TabsTrigger>
+              {process.env.NEXT_PUBLIC_ENABLE_DEMO_TRADING === '1' && (
+                <TabsTrigger value="exec">Exec</TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="performance" className="space-y-6">
@@ -207,8 +212,8 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
 
             <TabsContent value="transactions">
               <Card className="p-6 gradient-card border-border/40">
-                <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
-                <p className="text-muted-foreground">Transaction history will be displayed here.</p>
+                <h3 className="text-lg font-semibold mb-4">Recent Events</h3>
+                <EventsFeed vaultId={vaultId} />
               </Card>
             </TabsContent>
 
@@ -239,6 +244,12 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
                 </div>
               </Card>
             </TabsContent>
+
+            {process.env.NEXT_PUBLIC_ENABLE_DEMO_TRADING === '1' && (
+              <TabsContent value="exec">
+                <ExecPanel vaultId={vaultId} />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </section>

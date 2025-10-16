@@ -28,8 +28,19 @@ class EventStore:
             except Exception:
                 pass
 
-    def list(self, vault: str, limit: int | None = None) -> List[Dict[str, Any]]:
+    def list(
+        self,
+        vault: str,
+        limit: int | None = None,
+        since: float | None = None,
+        types: List[str] | None = None,
+    ) -> List[Dict[str, Any]]:
         arr = list(self._events.get(vault, []))
+        if since is not None:
+            arr = [e for e in arr if float(e.get("ts", 0)) >= float(since)]
+        if types:
+            tset = set(types)
+            arr = [e for e in arr if str(e.get("type")) in tset]
         if limit is not None and limit >= 0:
             return arr[-limit:]
         return arr
@@ -37,4 +48,3 @@ class EventStore:
 
 EVENT_LOG_FILE = os.getenv("EVENT_LOG_FILE") or None
 store = EventStore(log_file=EVENT_LOG_FILE)
-

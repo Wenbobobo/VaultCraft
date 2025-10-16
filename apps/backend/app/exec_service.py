@@ -20,21 +20,34 @@ class ExecDriver:
 
 
 class HyperSDKDriver(ExecDriver):
-    def __init__(self):
-        # Deferred import and simple guard; real wiring can be added with auth/session
+    def __init__(self, base_url: str | None = None, private_key: str | None = None):
+        # Deferred import
         try:
-            import hyperliquid  # noqa: F401
-        except Exception as e:  # pragma: no cover - defensive
+            from hyperliquid.exchange import Exchange, OrderType  # type: ignore
+            from eth_account import Account  # type: ignore
+        except Exception as e:  # pragma: no cover
             raise RuntimeError("hyperliquid SDK not available") from e
-        # TODO: wire API key / session if needed (future work)
+        env = Settings()
+        pk = private_key or env.HYPER_TRADER_PRIVATE_KEY or env.PRIVATE_KEY
+        if not pk:
+            raise RuntimeError("missing HYPER_TRADER_PRIVATE_KEY for live exec")
+        self._Exchange = Exchange
+        self._OrderType = OrderType
+        self._wallet = Account.from_key(pk)
+        self._base_url = base_url or env.HYPER_API_URL
+        self._exch = Exchange(wallet=self._wallet, base_url=self._base_url)
 
     def open(self, order: Order) -> Dict[str, Any]:
-        # Placeholder to avoid real network in this environment
-        # In production, use hyperliquid.exchange.Exchange with trader private key
-        raise RuntimeError("live exec not wired: provide driver or set ENABLE_LIVE_EXEC=false")
+        is_buy = True if order.side == "buy" else False
+        if order.reduce_only:
+            res = self._exch.order(name=order.symbol, is_buy=is_buy, sz=float(order.size), limit_px=0.0, order_type=self._OrderType.Market, reduce_only=True)
+        else:
+            res = self._exch.market_open(name=order.symbol, is_buy=is_buy, sz=float(order.size))
+        return {"ack": res}
 
     def close(self, symbol: str, size: float | None = None) -> Dict[str, Any]:
-        raise RuntimeError("live exec not wired: provide driver or set ENABLE_LIVE_EXEC=false")
+        res = self._exch.market_close(name=symbol, sz=(float(size) if size is not None else None))
+        return {"ack": res}
 
 
 @dataclass

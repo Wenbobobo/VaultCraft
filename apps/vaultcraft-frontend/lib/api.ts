@@ -61,3 +61,20 @@ export async function getPrices(symbols: string[]): Promise<Record<string, numbe
   return data.prices || {};
 }
 
+export type EventItem = {
+  type: string
+  ts?: number
+  status?: string
+  payload?: any
+  error?: string
+  symbol?: string
+  side?: string
+  size?: number
+}
+
+export async function getEvents(vault: string, limit = 50): Promise<EventItem[]> {
+  const r = await fetch(`${BACKEND_URL}/api/v1/events/${vault}?limit=${limit}`, { cache: "no-store" })
+  if (!r.ok) throw new Error("events fetch failed")
+  const data = await r.json()
+  return data.events || []
+}

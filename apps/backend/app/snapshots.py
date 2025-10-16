@@ -24,9 +24,12 @@ class SnapshotStore:
             return []
         return arr[-window:]
 
+    def get_since(self, vault: str, since_ts: float) -> List[Tuple[float, float]]:
+        arr = self._data.get(vault, [])
+        return [item for item in arr if item[0] >= since_ts]
+
     def clear(self) -> None:
         self._data.clear()
 
 
 store = SnapshotStore()
-

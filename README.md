@@ -6,7 +6,7 @@
 - 后端（Python/uv）：指标计算与最小 API（年化、波动、Sharpe、最大回撤、恢复期）
 - 文档：PRD 与技术方案（docs/）
 
-演示链：任选运行良好的 EVM 测试网（建议 Base Sepolia 或 Arbitrum Sepolia）。
+演示链：Hyper Testnet（chainId 998，EVM RPC https://rpc.hyperliquid-testnet.xyz/evm）。
 
 ---
 
@@ -87,6 +87,34 @@ sequenceDiagram
 
 ---
 
+## 统一环境变量（根目录 .env）
+
+仅使用仓库根目录 `.env` 进行统一配置（后端/前端/Hardhat 共用）。示例见 `.env.example`。
+
+后端（FastAPI / Exec / 行情）关键参数：
+- HYPER_API_URL=https://api.hyperliquid-testnet.xyz
+- HYPER_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
+- ENABLE_HYPER_SDK=1                      # SDK 优先行情
+- ENABLE_LIVE_EXEC=0                      # 实单开关（1=开启）
+- HYPER_TRADER_PRIVATE_KEY=0x...          # 或 PRIVATE_KEY=0x...
+- EXEC_ALLOWED_SYMBOLS=BTC,ETH            # 允许交易对
+- EXEC_MIN_LEVERAGE=1.0 / EXEC_MAX_LEVERAGE=50.0
+- EXEC_MAX_NOTIONAL_USD=1000000000        # 名义金额上限
+- APPLY_DRY_RUN_TO_POSITIONS=1            # dry-run 是否回写 positions
+- APPLY_LIVE_TO_POSITIONS=1               # live exec 是否回写 positions
+- POSITIONS_FILE=deployments/positions.json
+- ENABLE_SNAPSHOT_DAEMON=0 / SNAPSHOT_INTERVAL_SEC=15
+- EVENT_LOG_FILE=logs/events.jsonl        # 可选，事件追加写
+
+前端（Next.js）关键参数：
+- NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000
+- NEXT_PUBLIC_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
+- NEXT_PUBLIC_ENABLE_DEMO_TRADING=0       # 演示下单面板开关
+
+Hardhat（部署/脚本）关键参数：
+- HYPER_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
+- PRIVATE_KEY=0x...                       # 测试网私钥（小额）
+
 ## 快速开始（Backend）
 
 推荐配置：Python 3.10+ & uv
@@ -157,13 +185,13 @@ npx hardhat vault:set-perf-fee --network baseSepolia --vault 0xVault --bps 1000
 ## 快速开始（Web 前端）
 
 ```
-cd apps/web
-npm install
-npm run dev
-# 打开 http://localhost:3000 查看示例列表与详情
+cd apps/vaultcraft-frontend
+pnpm i
+pnpm dev
+# 打开 http://localhost:3000 查看列表与详情；Transactions 标签查看事件流
 ```
 
-当前为静态演示数据。待测试网部署完成后，可接入真实合约地址与后端 API（指标/NAV）。
+前端已对接后端 API（metrics/nav/events）与可选链上只读；无需单独前端 .env.local，变量来自根 .env。
 
 ---
 

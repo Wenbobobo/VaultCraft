@@ -7,6 +7,7 @@ from typing import Dict
 
 from .hyper_client import HyperHTTP, DEFAULT_API, DEFAULT_RPC
 from .hyper_exec import HyperExecClient, Order
+from .exec_service import ExecService
 from .positions import get_profile, set_profile
 
 
@@ -70,6 +71,33 @@ def main() -> None:
     p4.add_argument("--positions", required=True, help='JSON dict, e.g. {"ETH":0.2,"BTC":-0.1}')
     p4.add_argument("--prices", required=True, help='JSON dict, e.g. {"ETH":3000,"BTC":60000}')
     p4.set_defaults(func=cmd_nav)
+
+    # exec:open
+    def cmd_exec_open(args: argparse.Namespace) -> None:
+        svc = ExecService()
+        out = svc.open(args.vault, Order(symbol=args.symbol, size=args.size, side=args.side, reduce_only=args.reduce, leverage=args.leverage))
+        print(json.dumps(out, indent=2))
+
+    p5 = sub.add_parser("exec-open", help="Execute open (live if enabled, else dry-run)")
+    p5.add_argument("vault")
+    p5.add_argument("symbol")
+    p5.add_argument("size", type=float)
+    p5.add_argument("side", choices=["buy","sell"])
+    p5.add_argument("--reduce", action="store_true")
+    p5.add_argument("--leverage", type=float, default=None)
+    p5.set_defaults(func=cmd_exec_open)
+
+    # exec:close
+    def cmd_exec_close(args: argparse.Namespace) -> None:
+        svc = ExecService()
+        out = svc.close(args.vault, symbol=args.symbol, size=args.size)
+        print(json.dumps(out, indent=2))
+
+    p6 = sub.add_parser("exec-close", help="Execute close (live if enabled, else dry-run)")
+    p6.add_argument("vault")
+    p6.add_argument("symbol")
+    p6.add_argument("--size", type=float, default=None)
+    p6.set_defaults(func=cmd_exec_close)
 
     # positions:get
     def cmd_positions_get(args: argparse.Namespace) -> None:

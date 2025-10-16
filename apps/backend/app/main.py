@@ -14,6 +14,7 @@ from .positions import get_profile
 from .snapshots import store as snapshot_store
 from .events import store as event_store
 from .exec_service import ExecService
+from .daemon import SnapshotDaemon
 
 app = FastAPI(title="VaultCraft v0 API")
 
@@ -83,6 +84,16 @@ def api_nav(address: str, window: int = 30):
     return {"address": address, "nav": nav}
 
 
+@app.get("/api/v1/nav_series/{address}")
+def api_nav_series(address: str, since: float | None = None, window: int | None = None):
+    if since is not None:
+        series = snapshot_store.get_since(address, since_ts=float(since))
+    else:
+        w = window if window is not None else 60
+        series = snapshot_store.get(address, window=int(w))
+    return {"address": address, "series": [{"ts": ts, "nav": round(nav, 6)} for (ts, nav) in series]}
+
+
 @app.post("/api/v1/nav/snapshot/{address}")
 def api_nav_snapshot(address: str, nav: float | None = None, ts: float | None = None):
     """Create a NAV snapshot for a vault.
@@ -109,8 +120,9 @@ def api_nav_snapshot(address: str, nav: float | None = None, ts: float | None = 
 
 
 @app.get("/api/v1/events/{address}")
-def api_events(address: str, limit: int | None = None):
-    ev = event_store.list(address, limit=limit)
+def api_events(address: str, limit: int | None = None, since: float | None = None, types: Optional[str] = None):
+    ty = [t for t in (types.split(',') if types else []) if t]
+    ev = event_store.list(address, limit=limit, since=since, types=ty if ty else None)
     return {"address": address, "events": ev}
 
 
@@ -237,3 +249,44 @@ def api_vault_detail(vault_id: str):
         "aum": int(nav_val),
         "totalShares": int(profile.get("denom", 1_000_000.0)),
     }
+
+
+# --- Positions admin (dev/demo) ---
+@app.get("/api/v1/positions/{vault_id}")
+def api_positions_get(vault_id: str):
+    return get_profile(vault_id)
+
+
+@app.post("/api/v1/positions/{vault_id}")
+def api_positions_set(vault_id: str, profile: Dict[str, object]):
+    from .positions import set_profile
+
+    set_profile(vault_id, profile)
+    unit = HyperExecClient.pnl_to_nav(
+        cash=float(profile.get("cash", 1_000_000.0)),
+        positions={str(k): float(v) for k, v in dict(profile.get("positions", {})).items()},
+        index_prices={s: 0.0 for s in dict(profile.get("positions", {})).keys()},
+    )
+    # only confirm set; nav is computed via dedicated endpoints with live prices
+    return {"ok": True}
+_snapshot_daemon: SnapshotDaemon | None = None
+
+
+@app.on_event("startup")
+def _startup():
+    global _snapshot_daemon
+    if settings.ENABLE_SNAPSHOT_DAEMON:
+        def list_ids() -> List[str]:
+            return [v["id"] for v in _vault_registry()]
+        _snapshot_daemon = SnapshotDaemon(list_vaults=list_ids, interval_sec=float(settings.SNAPSHOT_INTERVAL_SEC))
+        _snapshot_daemon.start()
+
+
+@app.on_event("shutdown")
+def _shutdown():
+    global _snapshot_daemon
+    try:
+        if _snapshot_daemon:
+            _snapshot_daemon.stop()
+    except Exception:
+        pass

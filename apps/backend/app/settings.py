@@ -1,31 +1,25 @@
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 from typing import List
 
 
 def _collect_env_files() -> List[str]:
-    # Search repo root for a .env alongside local .env
+    """Return only the repository root .env to enforce a unified env file."""
     here = Path(__file__).resolve()
-    candidates: List[str] = []
-    # local .env (apps/backend/.env)
-    candidates.append(str(here.parent.parent / ".env"))
-    # repo root .env
     root = here
-    for _ in range(6):  # climb up to 6 levels
+    for _ in range(10):
         if (root / ".git").exists() or (root / "README.md").exists():
             break
         if root.parent == root:
             break
         root = root.parent
-    candidates.append(str(root / ".env"))
-    # keep order: root first, then local overrides
-    # but pydantic-settings later ones override prior; reverse to prefer local
-    return [candidates[-1], candidates[0]]
+    return [str(root / ".env")]
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=tuple(_collect_env_files()), extra="allow", case_sensitive=False)
     # Hyper endpoints
     HYPER_API_URL: str = "https://api.hyperliquid-testnet.xyz"
     HYPER_RPC_URL: str = "https://rpc.hyperliquid-testnet.xyz/evm"
@@ -48,12 +42,17 @@ class Settings(BaseSettings):
     EXEC_MAX_NOTIONAL_USD: float = 1e9
     # Live trading credentials (if SDK uses private key)
     HYPER_TRADER_PRIVATE_KEY: str | None = None
+    PRIVATE_KEY: str | None = None  # alias for convenience
+    ADDRESS: str | None = None      # optional display/use
     # Apply fills to positions when live exec succeeds
     APPLY_LIVE_TO_POSITIONS: bool = True
+    # Background snapshot daemon
+    ENABLE_SNAPSHOT_DAEMON: bool = False
+    SNAPSHOT_INTERVAL_SEC: float = 15.0
+    # User WS listener for live fills write-back
+    ENABLE_USER_WS_LISTENER: bool = False
 
-    class Config:
-        env_file = tuple(_collect_env_files())
-        case_sensitive = False
+    # pydantic v2: model_config covers env loading and extra handling
 
 
 settings = Settings()
