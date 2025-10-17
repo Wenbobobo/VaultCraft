@@ -57,7 +57,7 @@ def process_user_event(vault: str, evt: Dict[str, Any]) -> None:
         try:
             apply_fill(vault, name, sz, side)
             unit = snapshot_now(vault)
-            event_store.add(vault, {"type": "fill", "status": "applied", "symbol": name, "side": side, "size": sz, "unitNav": unit})
+            event_store.add(vault, {"type": "fill", "status": "applied", "source": "ws", "symbol": name, "side": side, "size": sz, "unitNav": unit})
         except Exception as e:
             event_store.add(vault, {"type": "fill", "status": "error", "error": str(e), "symbol": name})
 

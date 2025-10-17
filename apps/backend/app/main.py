@@ -36,6 +36,9 @@ def api_status():
         "enable_snapshot_daemon": bool(getattr(settings, "ENABLE_SNAPSHOT_DAEMON", False)),
         "address": getattr(settings, "ADDRESS", None),
         "allowed_symbols": getattr(settings, "EXEC_ALLOWED_SYMBOLS", ""),
+        "exec_min_leverage": getattr(settings, "EXEC_MIN_LEVERAGE", None),
+        "exec_max_leverage": getattr(settings, "EXEC_MAX_LEVERAGE", None),
+        "exec_max_notional_usd": getattr(settings, "EXEC_MAX_NOTIONAL_USD", None),
     }
     try:
         http = HyperHTTP()
@@ -184,6 +187,43 @@ def api_price(symbols: str):
     return {"prices": prices}
 
 
+# --- Artifacts helper for FE Manager ---
+@app.get("/api/v1/artifacts/vault")
+def api_artifact_vault():
+    """Serve Vault ABI and bytecode from Hardhat artifacts for FE deployment.
+
+    This avoids bundling artifacts in the FE and keeps a single source of truth.
+    """
+    artifact = Path("hardhat") / "artifacts" / "contracts" / "Vault.sol" / "Vault.json"
+    if not artifact.exists():
+        return {"error": "artifact not found", "path": str(artifact)}
+    try:
+        data = json.loads(artifact.read_text("utf-8"))
+        return {"abi": data.get("abi", []), "bytecode": data.get("bytecode")}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/v1/register_deployment")
+def api_register_deployment(vault: str, asset: str | None = None):
+    """Record a deployment in deployments/hyper-testnet.json for discovery.
+
+    This is a convenience for demo. In production this should be guarded.
+    """
+    f = Path("deployments") / "hyper-testnet.json"
+    try:
+        meta = json.loads(f.read_text()) if f.exists() else {}
+    except Exception:
+        meta = {}
+    meta.setdefault("network", "hyperTestnet")
+    if asset:
+        meta["asset"] = asset
+    meta["vault"] = vault
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    return {"ok": True, "path": str(f)}
+
+
 # --- Exec Service (dry-run env-controlled) ---
 @app.post("/api/v1/exec/open")
 def api_exec_open(symbol: str, size: float, side: str, reduce_only: bool = False, leverage: float | None = None, vault: str = "_global"):
@@ -271,6 +311,18 @@ def api_vault_detail(vault_id: str):
     unit_nav = round(nav_val / profile.get("denom", 1_000_000.0), 6)
     nav_series = [unit_nav] * 60
     m = compute_metrics(nav_series)
+    # Attempt to enrich with deployment meta (asset address, if known)
+    asset_addr = None
+    try:
+        d = Path("deployments") / "hyper-testnet.json"
+        if d.exists():
+            meta = json.loads(d.read_text() or "{}")
+            if isinstance(meta.get("vault"), str) and meta.get("vault") == vault_id:
+                a = meta.get("asset")
+                if isinstance(a, str) and a:
+                    asset_addr = a
+    except Exception:
+        pass
     return {
         **info,
         "metrics": m,
@@ -280,6 +332,7 @@ def api_vault_detail(vault_id: str):
         "managementFee": 0,
         "aum": int(nav_val),
         "totalShares": int(profile.get("denom", 1_000_000.0)),
+        **({"asset": asset_addr} if asset_addr else {}),
     }
 
 

@@ -94,7 +94,7 @@ class ExecService:
             if settings.APPLY_DRY_RUN_TO_POSITIONS:
                 apply_fill(vault, order.symbol, order.size, order.side)
                 unit = snapshot_now(vault)
-                event_store.add(vault, {"type": "fill", "status": "applied", "symbol": order.symbol, "side": order.side, "size": order.size, "unitNav": unit})
+                event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": order.symbol, "side": order.side, "size": order.size, "unitNav": unit})
             return {"ok": True, "dry_run": True, "payload": payload}
         try:
             ack = self._driver().open(order)
@@ -102,7 +102,7 @@ class ExecService:
             if settings.APPLY_LIVE_TO_POSITIONS:
                 apply_fill(vault, order.symbol, order.size, order.side)
                 unit = snapshot_now(vault)
-                event_store.add(vault, {"type": "fill", "status": "applied", "symbol": order.symbol, "side": order.side, "size": order.size, "unitNav": unit})
+                event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": order.symbol, "side": order.side, "size": order.size, "unitNav": unit})
             return {"ok": True, "payload": ack}
         except Exception as e:
             event_store.add(vault, {"type": "exec_open", "status": "error", "error": str(e)})
