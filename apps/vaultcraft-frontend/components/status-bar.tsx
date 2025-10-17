@@ -10,6 +10,10 @@ type Flags = {
   enable_snapshot_daemon: boolean
   address?: string | null
   allowed_symbols?: string
+  exec_min_leverage?: number
+  exec_max_leverage?: number
+  exec_min_notional_usd?: number
+  exec_max_notional_usd?: number
 }
 
 type Net = { rpc?: string | null; chainId?: number | null; block?: number | null }
@@ -17,6 +21,7 @@ type Net = { rpc?: string | null; chainId?: number | null; block?: number | null
 export function StatusBar() {
   const [flags, setFlags] = useState<Flags | null>(null)
   const [net, setNet] = useState<Net | null>(null)
+  const [active, setActive] = useState<{ listener_active?: boolean; snapshot_active?: boolean } | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -28,6 +33,7 @@ export function StatusBar() {
         if (!alive) return
         setFlags(b.flags)
         setNet(b.network)
+        setActive(b.state || null)
       } catch {}
     }
     load()
@@ -42,12 +48,17 @@ export function StatusBar() {
     <div className="text-xs text-muted-foreground flex items-center gap-4 px-4 py-2 border-b border-border/40">
       <div>Mode: <span className={`${modeColor} font-mono`}>{mode}</span></div>
       <div>SDK: <span className={flags.enable_sdk ? "text-green-400" : "text-yellow-400"}>{flags.enable_sdk ? "on" : "off"}</span></div>
-      <div>Listener: <span className={flags.enable_user_ws ? "text-green-400" : "text-muted-foreground"}>{flags.enable_user_ws ? "on" : "off"}</span></div>
+      <div>Listener: <span className={(flags.enable_user_ws && active?.listener_active) ? "text-green-400" : (flags.enable_user_ws ? "text-yellow-400" : "text-muted-foreground")}>{flags.enable_user_ws ? (active?.listener_active ? "on" : "pending") : "off"}</span></div>
       {flags.allowed_symbols && (<div>Symbols: <span className="font-mono">{flags.allowed_symbols}</span></div>)}
+      {(flags.exec_min_leverage != null && flags.exec_max_leverage != null) && (
+        <div>Lev: <span className="font-mono">{flags.exec_min_leverage}–{flags.exec_max_leverage}x</span></div>
+      )}
+      {(flags.exec_min_notional_usd != null) && (
+        <div>Min ${flags.exec_min_notional_usd}</div>
+      )}
       {net && (
         <div className="ml-auto">RPC: <span className="font-mono">{net.chainId ?? "?"}</span> · Block: <span className="font-mono">{net.block ?? "?"}</span></div>
       )}
     </div>
   )
 }
-

@@ -134,6 +134,7 @@ pnpm dev
 - `NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000`
 - `NEXT_PUBLIC_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm`
 - `NEXT_PUBLIC_ENABLE_DEMO_TRADING=0|1`（演示下单面板开关）
+ - `NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS=0x...`（可选，推荐填写 Testnet USDC 地址，Manager 页面会自动预填）
   （钱包按钮默认显示，无需开关）
 
 页面：

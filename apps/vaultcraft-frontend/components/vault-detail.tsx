@@ -18,6 +18,7 @@ import { PositionsHistory } from "@/components/positions-history"
 import { useWallet } from "@/hooks/use-wallet"
 import { Input } from "@/components/ui/input"
 import { ethers } from "ethers"
+import { BACKEND_URL } from "@/lib/config"
 
 type UIState = {
   id: string
@@ -94,7 +95,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
       })
       .catch(() => {})
     // load risk flags from backend status
-    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}/api/v1/status`).then(async (r) => {
+    fetch(`${BACKEND_URL}/api/v1/status`).then(async (r) => {
       try {
         const b = await r.json()
         setRisk({
@@ -216,7 +217,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
                     // simulate a -10% shock by adding a snapshot
                     const last = nav.series.length ? nav.series[nav.series.length - 1].nav : vault.unitNav
                     const shock = Math.max(0, last * 0.9)
-                    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}/api/v1/nav/snapshot/${vaultId}?nav=${shock}`, { method: 'POST' })
+                    fetch(`${BACKEND_URL}/api/v1/nav/snapshot/${vaultId}?nav=${shock}`, { method: 'POST' })
                       .then(() => nav.refresh())
                       .catch(() => {})
                   }}>Simulate -10% Shock</Button>

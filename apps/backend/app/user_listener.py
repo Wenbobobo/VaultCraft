@@ -102,6 +102,18 @@ class UserEventsListener:
         if not (env.ENABLE_LIVE_EXEC and env.ENABLE_USER_WS_LISTENER):
             return
         sub_user = env.ADDRESS or ""
+        if not sub_user:
+            # Derive from private key as a convenience when ADDRESS is not set
+            try:
+                from eth_account import Account  # type: ignore
+                pk = env.HYPER_TRADER_PRIVATE_KEY or env.PRIVATE_KEY
+                if pk:
+                    t = str(pk).strip().strip('"').strip("'")
+                    if not t.startswith("0x") and len(t) == 64:
+                        t = "0x" + t
+                    sub_user = Account.from_key(t).address
+            except Exception:
+                pass
         # Start thread to manage subscription with simple reconnect
         def run():
             backoff = 1.0

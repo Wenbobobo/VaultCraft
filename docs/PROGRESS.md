@@ -104,3 +104,18 @@
 - 文档：README“统一环境变量”、docs/DEPLOYMENT.md（私钥格式与余额排错）、docs/DEMO_PLAN.md（评审脚本）
 - 入口：Hardhat（部署）、FastAPI（后端）、Next.js（前端）
 - 故障：insufficient funds（给 ADDRESS 充测试币）；私钥格式（0x+64hex）；SSR/Hydration 与 `mockVault` 残留（详见 docs/ISSUES.md）
+
+---
+
+## 多端协同开发同步清单（Dev Sync Checklist）
+
+- 统一环境：仅根 `.env` 生效；前端读取 `NEXT_PUBLIC_*`；Hardhat/Backend 共用 `HYPER_*` 与私钥。
+- 钱包/监听一致：`ADDRESS` 必须与用于实单的 `PRIVATE_KEY/HYPER_TRADER_PRIVATE_KEY` 对应，否则 Listener 收不到成交。
+- 风控参数口径：`EXEC_ALLOWED_SYMBOLS`、`EXEC_MIN/MAX_LEVERAGE`、`EXEC_MIN/MAX_NOTIONAL_USD` 在 `/api/v1/status` 输出；前端 StatusBar 直接展示。
+- 演示尺寸：Hyper 最小下单约 $10；前端/文档默认建议 ETH `0.01`；过小尺寸前置拒单（Pretrade）。
+- API 稳定性：FE 通过 `BACKEND_URL` 访问 `/status`、`/nav_series`、`/events`、`/pretrade`、`/exec/*`；路径/返回字段保持向后兼容。
+- 构建/运行：
+  - Backend：`uv run uvicorn app.main:app --reload`（tests：`uv run pytest -q`）
+  - Frontend：`pnpm dev`（状态条检查 flags/chainId/block）
+  - Hardhat：`npx hardhat test` / `npm run deploy:hyperTestnet`
+  - 快照/事件：`npx hardhat vault:snapshot --network hyperTestnet --vault 0x...`

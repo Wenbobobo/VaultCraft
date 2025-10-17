@@ -151,12 +151,36 @@ class ExecService:
             ack = self._driver().close(symbol=symbol, size=size)
             payload_ack = ack.get("ack") if isinstance(ack, dict) else ack
             ok = not _payload_has_error(payload_ack)
-            event_store.add(vault, {"type": "exec_close", "status": ("ack" if ok else "error"), "payload": ack})
-            if ok and settings.APPLY_LIVE_TO_POSITIONS:
-                apply_close(vault, symbol, size)
-                unit = snapshot_now(vault)
-                event_store.add(vault, {"type": "fill", "status": "applied", "symbol": symbol, "side": "close", "size": size, "unitNav": unit})
-            return {"ok": ok, "payload": ack}
+            if ok:
+                event_store.add(vault, {"type": "exec_close", "status": "ack", "payload": ack})
+                if settings.APPLY_LIVE_TO_POSITIONS:
+                    apply_close(vault, symbol, size)
+                    unit = snapshot_now(vault)
+                    event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": symbol, "side": "close", "size": size, "unitNav": unit})
+                return {"ok": True, "payload": ack}
+            # Not ok: consider reduce-only fallback if enabled
+            if Settings().ENABLE_CLOSE_FALLBACK_RO:
+                prof = get_profile(vault)
+                pos = float(prof.get("positions", {}).get(symbol, 0.0))
+                if pos != 0.0:
+                    side = "sell" if pos > 0 else "buy"
+                    ro = Order(symbol=symbol, size=(abs(pos) if size is None else size), side=side, reduce_only=True)
+                    try:
+                        ack2 = self._driver().open(ro)
+                        payload_ack2 = ack2.get("ack") if isinstance(ack2, dict) else ack2
+                        ok2 = not _payload_has_error(payload_ack2)
+                        event_store.add(vault, {"type": "exec_close", "status": ("ack" if ok2 else "error"), "payload": ack2})
+                        if ok2 and settings.APPLY_LIVE_TO_POSITIONS:
+                            apply_close(vault, symbol, size)
+                            unit = snapshot_now(vault)
+                            event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": symbol, "side": "close", "size": size, "unitNav": unit})
+                        return {"ok": ok2, "payload": ack2}
+                    except Exception as e2:
+                        event_store.add(vault, {"type": "exec_close", "status": "error", "error": str(e2)})
+                        return {"ok": False, "error": str(e2)}
+            # Otherwise log original error
+            event_store.add(vault, {"type": "exec_close", "status": "error", "payload": ack})
+            return {"ok": False, "payload": ack}
         except Exception as e:
             event_store.add(vault, {"type": "exec_close", "status": "error", "error": str(e)})
             return {"ok": False, "error": str(e)}

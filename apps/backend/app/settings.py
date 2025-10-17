@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     ADDRESS: str | None = None      # optional display/use
     # Apply fills to positions when live exec succeeds
     APPLY_LIVE_TO_POSITIONS: bool = True
+    # Optional: on close error, attempt reduce-only fallback using stored position
+    ENABLE_CLOSE_FALLBACK_RO: bool = True
     # Background snapshot daemon
     ENABLE_SNAPSHOT_DAEMON: bool = False
     SNAPSHOT_INTERVAL_SEC: float = 15.0

@@ -8,22 +8,30 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { useWallet } from "@/hooks/use-wallet"
-import { BACKEND_URL } from "@/lib/config"
+import { BACKEND_URL, DEFAULT_ASSET_ADDRESS } from "@/lib/config"
 import { ethers } from "ethers"
 import { ExecPanel } from "@/components/exec-panel"
 
 const MGMT_ABI = [
+  // writes
   "function setWhitelist(address u, bool allowed)",
   "function setLockMinDays(uint256 daysMin)",
   "function setPerformanceFee(uint256 pBps)",
   "function pause()",
   "function unpause()",
+  // reads
   "function asset() view returns (address)",
+  "function admin() view returns (address)",
+  "function manager() view returns (address)",
+  "function guardian() view returns (address)",
+  "function performanceFeeP() view returns (uint256)",
+  "function lockMinSeconds() view returns (uint256)",
+  "function adapterAllowed(address) view returns (bool)",
 ]
 
 export default function ManagerPage() {
   const { connect, isHyper } = useWallet()
-  const [asset, setAsset] = useState("")
+  const [asset, setAsset] = useState(DEFAULT_ASSET_ADDRESS)
   const [name, setName] = useState("VaultCraft")
   const [symbol, setSymbol] = useState("VSHARE")
   const [isPrivate, setIsPrivate] = useState(false)
@@ -37,6 +45,8 @@ export default function ManagerPage() {
   const [adapterAddr, setAdapterAddr] = useState("")
   const [newManager, setNewManager] = useState("")
   const [newGuardian, setNewGuardian] = useState("")
+  const [readInfo, setReadInfo] = useState<any | null>(null)
+  const [devMsg, setDevMsg] = useState<string | null>(null)
 
   async function deploy() {
     setDeployErr(null); setDeployMsg(null)
@@ -84,6 +94,54 @@ export default function ManagerPage() {
     }
   }
 
+  async function readBack() {
+    setMgmtMsg(null)
+    setReadInfo(null)
+    try {
+      const eth = (window as any).ethereum
+      const provider = new ethers.BrowserProvider(eth)
+      const c = new ethers.Contract(vaultAddr, MGMT_ABI, provider)
+      const [assetAddr, admin, manager, guardian, perf, lock] = await Promise.all([
+        c.asset(), c.admin(), c.manager(), c.guardian(), c.performanceFeeP(), c.lockMinSeconds()
+      ])
+      let adapterAllowed = false
+      if (ethers.isAddress(adapterAddr)) {
+        try { adapterAllowed = await c.adapterAllowed(adapterAddr) } catch {}
+      }
+      setReadInfo({ asset: assetAddr, admin, manager, guardian, performanceFeeP: Number(perf), lockDays: Math.floor(Number(lock)/86400), adapterAllowed })
+    } catch (e: any) {
+      setMgmtMsg(e?.shortMessage || e?.message || String(e))
+    }
+  }
+
+  async function deployMockAsset() {
+    setDevMsg(null)
+    try {
+      await connect()
+      const artRes = await fetch(`${BACKEND_URL}/api/v1/artifacts/mockerc20`)
+      const art = await artRes.json()
+      if (!art?.bytecode || !art?.abi) throw new Error("MockERC20 artifact not available")
+      const eth = (window as any).ethereum
+      const provider = new ethers.BrowserProvider(eth)
+      const signer = await provider.getSigner()
+      const fac = new ethers.ContractFactory(art.abi, art.bytecode, signer)
+      const tx = await fac.deploy("USD Stable", "USDS")
+      setDevMsg(`Deploying MockERC20... ${tx.deploymentTransaction()?.hash}`)
+      const deployed = await tx.waitForDeployment()
+      const addr = await deployed.getAddress()
+      // Mint demo balance to signer
+      const erc = new ethers.Contract(addr, art.abi, signer)
+      const amt = ethers.parseEther("1000000")
+      const txm = await erc.mint(await signer.getAddress(), amt)
+      setDevMsg(`Minting... ${txm.hash}`)
+      await txm.wait()
+      setAsset(addr)
+      setDevMsg(`Mock asset deployed: ${addr} and minted 1,000,000 to you`)
+    } catch (e: any) {
+      setDevMsg(e?.shortMessage || e?.message || String(e))
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -96,6 +154,10 @@ export default function ManagerPage() {
                 <div>
                   <Label>Asset ERC20 Address</Label>
                   <Input value={asset} onChange={(e) => setAsset(e.target.value)} placeholder="0x..." />
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={deployMockAsset}>Dev: Deploy MockERC20 + Mint</Button>
+                    {devMsg && (<div className="text-xs text-muted-foreground break-all">{devMsg}</div>)}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -133,6 +195,22 @@ export default function ManagerPage() {
                 <div>
                   <Label>Vault Address</Label>
                   <Input value={vaultAddr} onChange={(e) => setVaultAddr(e.target.value)} placeholder="0x..." />
+                  {validVault && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={readBack}>Read Current</Button>
+                      {readInfo && (
+                        <div className="text-xs text-muted-foreground">
+                          <div>Asset {readInfo.asset}</div>
+                          <div>Admin {readInfo.admin}</div>
+                          <div>Manager {readInfo.manager}</div>
+                          <div>Guardian {readInfo.guardian}</div>
+                          <div>Perf Fee {readInfo.performanceFeeP} bps</div>
+                          <div>Lock {readInfo.lockDays} day(s)</div>
+                          {ethers.isAddress(adapterAddr) && <div>Adapter allowed: {String(readInfo.adapterAllowed)}</div>}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Button onClick={() => call('pause')}>Pause</Button>

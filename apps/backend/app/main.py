@@ -26,6 +26,10 @@ def health():
     return {"ok": True}
 
 
+_snapshot_daemon: SnapshotDaemon | None = None
+_user_listener: UserEventsListener | None = None
+
+
 @app.get("/api/v1/status")
 def api_status():
     # Sanitize settings for FE/ops visibility
@@ -47,7 +51,12 @@ def api_status():
         rpc = {"rpc": http.rpc_url, "chainId": info.chain_id, "block": info.block_number}
     except Exception:
         rpc = {"rpc": getattr(settings, "HYPER_RPC_URL", None), "chainId": None, "block": None}
-    return {"ok": True, "flags": flags, "network": rpc}
+    # runtime daemon states
+    state = {
+        "listener_active": bool(_user_listener is not None),
+        "snapshot_active": bool(_snapshot_daemon is not None),
+    }
+    return {"ok": True, "flags": flags, "network": rpc, "state": state}
 
 
 @app.post("/metrics")
@@ -196,6 +205,19 @@ def api_artifact_vault():
     This avoids bundling artifacts in the FE and keeps a single source of truth.
     """
     artifact = Path("hardhat") / "artifacts" / "contracts" / "Vault.sol" / "Vault.json"
+    if not artifact.exists():
+        return {"error": "artifact not found", "path": str(artifact)}
+    try:
+        data = json.loads(artifact.read_text("utf-8"))
+        return {"abi": data.get("abi", []), "bytecode": data.get("bytecode")}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/v1/artifacts/mockerc20")
+def api_artifact_mockerc20():
+    """Serve MockERC20 ABI and bytecode from Hardhat artifacts for FE dev helpers."""
+    artifact = Path("hardhat") / "artifacts" / "contracts" / "MockERC20.sol" / "MockERC20.json"
     if not artifact.exists():
         return {"error": "artifact not found", "path": str(artifact)}
     try:
@@ -355,9 +377,6 @@ def api_positions_set(vault_id: str, profile: Dict[str, object]):
     )
     # only confirm set; nav is computed via dedicated endpoints with live prices
     return {"ok": True}
-_snapshot_daemon: SnapshotDaemon | None = None
-_user_listener: UserEventsListener | None = None
-
 
 @app.on_event("startup")
 def _startup():
