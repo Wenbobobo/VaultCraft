@@ -15,3 +15,7 @@
 
 - 事件监听（WS）依赖外网可用性与 SDK 行为
   - 若受限，则以 ack 驱动回写（服务端）仍能保证闭环
+- Hyper Testnet 流动性稀薄
+  - 现状：`ETH` 合约在测试网缺少对手单，`market_close` 或 reduce-only Ioc 可能报错（价格带/无成交）
+  - 影响：实测已成功开仓 0.01 ETH，多次尝试平仓时出现“Price too far from oracle”/“could not match”提示，需等待流动性或改用挂单方式
+  - 建议：演示前预热订单簿或准备手动挂单脚本，必要时联系评委说明测试网局限

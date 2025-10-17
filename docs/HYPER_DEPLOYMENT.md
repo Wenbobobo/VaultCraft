@@ -137,4 +137,6 @@ uv run python -m app.cli positions:set 0x1234...5678 '{"cash":1000000,"positions
 - Hyper 最小下单金额为 $10：若 `pretrade` 返回 `notional below minimum` 或 ACK 中出现“Order must have minimum value of $10”，请增大下单 `size`（例如 ETH 取 `0.01`）。
 - 市价平仓 `market_close` 使用 `coin` 参数；若 ACK 报 “Price too far from oracle”，通常为临时价带限制，可稍后重试或采用更小 `size`。
 - 监听器（WS）需 `ADDRESS` 与真实执行的钱包一致，否则不会收到成交事件。
+- 若启用 `ENABLE_CLOSE_FALLBACK_RO=1`，平仓失败会自动尝试 Reduce-Only 订单；若仍失败，可在事件流查看 error payload 并手动调整仓位。
+- 测试网常缺对手单：Exec Service 现将市价/Reduce-Only 的滑点限制在 10bps，若仍提示“could not immediately match”，请改用 CLI 提交挂单（如 `order_type={"limit":{"tif":"Gtc"}}`）等待撮合，或提前与协作者约定对敲。
 ```

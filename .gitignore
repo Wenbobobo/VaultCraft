@@ -8,6 +8,7 @@ wheels/
 
 # LLM-related
 .gemini/
+codex.txt
 
 # Environments
 .env
@@ -54,3 +55,4 @@ log.txt
 .coverage
 *.tar
 error.txt
+

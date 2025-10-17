@@ -19,33 +19,26 @@
 1. 连接钱包（Hyper Testnet）
    - Header 点击 “Connect Wallet”
    - 自动切换/添加到链 998（Hyper Testnet）；状态条显示 chainId/block
-2. Manager Launch Checklist
-   - 打开 /manager，检查顶部 Checklist：资产地址（USDC）、Decimals、Manager 余额是否充足、自助提醒。
-   - 若默认 `NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS` 已配置，Asset 自动预填；余额不足时可以提示评委使用测试水龙头或运维辅助。
-3. Vault 浏览与搜索（Browse）
+2. Vault 浏览与搜索（Browse）
    - 点击首页“Explore Vaults”或顶部导航“Browse”进入列表页
    - 通过筛选（Public/Private）与排序（Sharpe/AUM/Return）浏览公募/私募
-4. 公募 Vault 详情（Transparency）
+3. 公募 Vault 详情（Transparency）
    - KPI 区：AUM / Unit NAV / Return / Sharpe / MDD
    - NAV 曲线：随快照/NAV 序列更新（/nav_series）
    - Holdings（公开）：Positions History 折线图（由事件 `fill` 重建头寸时间线）
    - Risk Controls：展示允许交易对、杠杆区间、名义上限（/status）
-5. 私募 Vault 入口（Access Control）
+4. 私募 Vault 入口（Access Control）
    - “Join Private Vault” 输入邀请码（演示：接受任意非空码并提示“Demo 已加入”；真实场景需预先白名单）
-6. Manager 创建与执行（/manager）
-   - “Deploy New Vault”：验证 Asset 字段（推荐 USDC），设置名称符号等，点击部署；部署完成后 Launch Checklist 会记录最近部署地址。
-   - “Manage Vault”：输入新地址，读取当前参数；可修改白名单、锁期、绩效费、Adapter。
-   - “Perps Execution”：在 Exec 面板尝试过小名义金额（提示最小 $10）→ 调整为 ETH `0.01`；若 Listener 运行，事件流将出现 `source: ws`。
-7. 投资（Deposit）
+5. 投资（Deposit）
    - 打开 Deposit 弹窗，输入金额 → 自动走 ERC20 `approve` → `vault.deposit` 交易发送与确认
    - 若为私募且未白名单：交易将被拒绝，前端友好提示（演示前建议预白名单评委地址）
-8. 风控展示（Pretrade）
+6. 风控展示（Pretrade）
    - 切换 Exec 标签：尝试超限杠杆/不在白名单/过小名义金额（< $10）→ 预检报错（"notional below minimum"）
-   - 正常 open/close（建议 ETH `0.01`）→ 事件流与 NAV 曲线联动更新；若 close 遭遇价带限制，可展示 Reduce-Only fallback（事件流会记录）。
-9. 我的组合（Portfolio）
+   - 正常 open/close（建议 ETH `0.01`）→ 事件流与 NAV 曲线联动更新
+7. 我的组合（Portfolio）
    - 自动读取钱包地址在各金库的份额 `balanceOf(user)`，显示锁定状态与当前价值
    - 可对已解锁的金库发起 `redeem(shares, receiver, owner)` 提现
-10. 异常与告警（Alert Simulation）
+8. 异常与告警（Alert Simulation）
    - 点击 “Simulate -10% Shock” → 后端写入 NAV 低值快照 → 曲线陡降，可讲述告警触发（电话/短信预留）
 
 旁白要点：

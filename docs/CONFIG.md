@@ -40,6 +40,7 @@
 - NEXT_PUBLIC_RPC_URL：前端只读 RPC，用于读取 ps/totalAssets 等链上数据
 - NEXT_PUBLIC_BACKEND_URL：后端 API 基地址（指标/事件）
 - NEXT_PUBLIC_ENABLE_DEMO_TRADING：是否展示受控下单面板（默认 0）
+- NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS：默认金库资产地址（建议填 USDC 测试网地址；为空时可使用 MockERC20 Dev Helper）
   （钱包按钮默认显示，无需配置）
 
 ---
@@ -50,6 +51,7 @@
 - ENABLE_HYPER_SDK：启用官方 Python SDK 获取行情（默认 0）
 - ENABLE_LIVE_EXEC：启用实单执行（默认 0）
 - EXEC_*：风险与额度参数（allowed symbols/lev/notional）
+- ENABLE_CLOSE_FALLBACK_RO：实单 close 失败时是否尝试 Reduce-Only fallback（默认 1）
 - POSITIONS_FILE / EVENT_LOG_FILE：本地持仓/事件持久化（演示）
 
 ---
