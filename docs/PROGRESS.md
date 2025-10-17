@@ -18,6 +18,7 @@
     - `markets` 从 `deployments/hyper-testnet.json` 读取配置对（BTC/ETH 5x 缺省）；`price` 采用 Hyper REST 助手（失败则回退确定性演示价格）
   - 新增价格路由：优先官方 Python SDK（启用需 `ENABLE_HYPER_SDK=1`），失败回落 REST，再回落演示价格
   - 后端测试：全部通过（`uv run pytest -q`）。修复了因 SDK 覆盖导致的价格端点单测不稳定：在测试 monkeypatch `HyperHTTP.get_index_prices` 时优先走 REST，且应用启动清空价格/NAV 缓存以保证确定性。
+  - 实单验证（Hyper Testnet）：已完成 ETH `0.01` 市价开仓（SDK `market_open`）并写回事件与 NAV；预检新增最小名义金额（默认 $10）。平仓路径使用 `market_close(coin=...)`，若价带限制可能返回错误（已按错误映射到事件，不回写持仓）。
 - 前端（Next.js+Tailwind）
   - 集成设计骨架并对接后端 API：
     - Discover：`/api/v1/vaults`（失败回退本地示例）

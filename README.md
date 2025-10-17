@@ -100,6 +100,7 @@ sequenceDiagram
 - EXEC_ALLOWED_SYMBOLS=BTC,ETH            # 允许交易对
 - EXEC_MIN_LEVERAGE=1.0 / EXEC_MAX_LEVERAGE=50.0
 - EXEC_MAX_NOTIONAL_USD=1000000000        # 名义金额上限
+- EXEC_MIN_NOTIONAL_USD=10                # 名义金额下限（Hyper最小下单$10）
 - APPLY_DRY_RUN_TO_POSITIONS=1            # dry-run 是否回写 positions
 - APPLY_LIVE_TO_POSITIONS=1               # live exec 是否回写 positions
 - POSITIONS_FILE=deployments/positions.json

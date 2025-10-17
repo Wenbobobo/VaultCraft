@@ -165,6 +165,10 @@ npx hardhat token:mint --network baseSepolia \
 # 存入金库（自动 approve 后 deposit）
 npx hardhat vault:deposit --network baseSepolia \
   --vault 0xVault --asset 0xToken --amount 100
+
+# 触发一次链上 NAV 快照（用于演示事件流）
+npx hardhat vault:snapshot --network hyperTestnet \
+  --vault 0xVault
 ```
 
 ---

@@ -30,6 +30,7 @@ npm run ping:hyper
 - `ENABLE_USER_WS_LISTENER`：用户事件监听回写（默认 0）
 - `ENABLE_SNAPSHOT_DAEMON` / `SNAPSHOT_INTERVAL_SEC`：后台快照
 - `EXEC_ALLOWED_SYMBOLS`、`EXEC_MIN/MAX_LEVERAGE`、`EXEC_MAX_NOTIONAL_USD`：风控
+- `EXEC_ALLOWED_SYMBOLS`、`EXEC_MIN/MAX_LEVERAGE`、`EXEC_MIN_NOTIONAL_USD`/`EXEC_MAX_NOTIONAL_USD`：风控（Hyper 最小下单 $10）
 - `APPLY_DRY_RUN_TO_POSITIONS` / `APPLY_LIVE_TO_POSITIONS`：是否回写头寸
 - `POSITIONS_FILE`：头寸文件路径
 - `EVENT_LOG_FILE`：事件日志（JSONL追加写）
@@ -131,4 +132,9 @@ uv run python -m app.cli positions:set 0x1234...5678 '{"cash":1000000,"positions
 - GET http://127.0.0.1:8000/api/v1/price?symbols=BTC,ETH
 - GET http://127.0.0.1:8000/api/v1/vaults
 - GET http://127.0.0.1:8000/api/v1/vaults/0x1234...5678
+
+小技巧与排错
+- Hyper 最小下单金额为 $10：若 `pretrade` 返回 `notional below minimum` 或 ACK 中出现“Order must have minimum value of $10”，请增大下单 `size`（例如 ETH 取 `0.01`）。
+- 市价平仓 `market_close` 使用 `coin` 参数；若 ACK 报 “Price too far from oracle”，通常为临时价带限制，可稍后重试或采用更小 `size`。
+- 监听器（WS）需 `ADDRESS` 与真实执行的钱包一致，否则不会收到成交事件。
 ```

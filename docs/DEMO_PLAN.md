@@ -33,8 +33,8 @@
    - 打开 Deposit 弹窗，输入金额 → 自动走 ERC20 `approve` → `vault.deposit` 交易发送与确认
    - 若为私募且未白名单：交易将被拒绝，前端友好提示（演示前建议预白名单评委地址）
 6. 风控展示（Pretrade）
-   - 切换 Exec 标签：尝试超限杠杆/不在白名单交易对 → 预检报错映射为友好提示
-   - 正常 open/close → 事件流与 NAV 曲线联动更新
+   - 切换 Exec 标签：尝试超限杠杆/不在白名单/过小名义金额（< $10）→ 预检报错（"notional below minimum"）
+   - 正常 open/close（建议 ETH `0.01`）→ 事件流与 NAV 曲线联动更新
 7. 我的组合（Portfolio）
    - 自动读取钱包地址在各金库的份额 `balanceOf(user)`，显示锁定状态与当前价值
    - 可对已解锁的金库发起 `redeem(shares, receiver, owner)` 提现
