@@ -110,7 +110,7 @@ sequenceDiagram
 - NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000
 - NEXT_PUBLIC_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
 - NEXT_PUBLIC_ENABLE_DEMO_TRADING=0       # 演示下单面板开关
-- NEXT_PUBLIC_ENABLE_WALLET=0             # 是否显示“Connect Wallet”按钮（未接入钱包时请置0）
+  (钱包按钮默认显示，无需额外开关)
 
 Hardhat（部署/脚本）关键参数：
 - HYPER_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm

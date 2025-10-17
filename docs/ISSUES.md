@@ -1,8 +1,8 @@
 ## 已知问题（P0/P1 之外暂不修复）
 
-- 前端 Wallet 连接按钮：已通过 `NEXT_PUBLIC_ENABLE_WALLET` 开关控制，默认隐藏占位按钮；后续接入 wagmi/rainbowkit 再开启。
+- 前端 Wallet 连接按钮：默认可见；如需隐藏可临时注释按钮。后续若切换至 wagmi/rainbowkit，不影响现有功能。
   - 影响：不影响当前 Demo（Exec 面板走后端 API）。
-  - 建议：P1 接入最小只读/签名能力后，启用该开关。
+  - 建议：P1 可按需集成 wagmi/rainbowkit 做更完善的钱包体验。
 
 - 详情页 Crash：`mockVault is not defined`（已修复）
   - 修复：替换残留 `mockVault.*` 为 `vault.*`，统一数据源。

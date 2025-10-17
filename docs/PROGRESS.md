@@ -22,7 +22,10 @@
     - Discover：`/api/v1/vaults`（失败回退本地示例）
     - 详情：`/api/v1/vaults/:id`、`/api/v1/nav_series/:id` 渲染 KPI 与 NAV 曲线
     - 新增 `StatusBar`（/status）、`EventsFeed`（/events）、可选 `ExecPanel`（/pretrade + /exec）
-  - P0 修复：移除 `mockVault.*` 残留（统一 `vault.*`），避免 Hydration 报错；新增 `NEXT_PUBLIC_ENABLE_WALLET` 开关，默认隐藏“Connect Wallet”按钮以避免无响应交互。
+  - P0 修复：移除 `mockVault.*` 残留（统一 `vault.*`），避免 Hydration 报错；默认显示“Connect Wallet”按钮（Header/Hero）。
+  - 导航调整：新增 Browse 页面（搜索/排序），About 跳转仓库；默认显示钱包按钮（Header/ Hero）。
+  - Portfolio：改为真实链上读取 `balanceOf/ps/nextRedeemAllowed`，支持 Withdraw。
+  - Manager：新增 /manager 页面，浏览器内一键部署 Vault（读取后端提供的 Hardhat Artifact），以及参数管理与白名单设置。
 
 ## 需求更新与排序（来自最新演示）
 
@@ -30,14 +33,19 @@
   - Hydration mismatch：已修复 `mockVault`；如有其他警告，排查随机/时间依赖并改用 CSR。
 
 ### P0（Demo 必需）
-- 最小钱包交互（可选）：当前通过开关隐藏连接按钮，保留受控 Exec 演示
-- Demo 脚本/状态提示：保证 /status、/pretrade、/events、/nav_series 稳定，前端状态条与错误提示完整
-- 文档打磨：统一 env、部署步骤与排错（余额不足、私钥格式）
+- [x] 详情页残留与 Hydration 修复；统一 CSR/SSR 数据
+- [x] Exec 面板与事件流 UX 提示（错误映射、loading、过滤、自动滚动）
+- [x] 文档打磨：统一 env、部署步骤与排错（余额不足、私钥格式）
+- [x] 钱包连接与链切换（Header，EIP‑1193）
+- [x] Deposit 真实交互（approve + deposit）
+- [x] 公募持仓历史（事件重建）与风险参数可视化（/status）
+- [x] Shock 模拟（写入 NAV 低值快照）
 
 ### P1（短期加分）
-- Listener（WS）回写落地与前端提示；NAV 曲线与事件时间轴对齐
-- 前端钱包完善（连接/签名/链切换）与最小链上只读
-- UI polish（空态、错误提示、loading skeleton）
+- 私募邀请码 UI（演示）与前端 gating；实白名单通过 Hardhat 预操作
+- Listener（WS）回写落地与前端标注（"fill via listener"）
+- UI polish（进一步空态/骨架、图表/事件时间对齐）
+ - Manager 扩展：Adapter 管理、Guardian/Manager 变更、部署记录写回。
 
 - P0（立即）
   - 为 `/api/v1/nav/:address` 接入真实 NAV 数据源（简单版：后端注册表中的头寸 + 价格 → `pnl_to_nav` 计算），并增加内存/SQLite 缓存
@@ -49,6 +57,8 @@
 - P2（后续）
   - 容量/拥挤函数、批量窗口、告警通道、Manager Console（参数调整、白名单、限权）
   - 跨链只读会计 → 桥接/消息 Orchestrator（v2）
+  - 私募邀请码签名校验与服务端管理
+  - 在线创建 Vault 表单化（替代 Hardhat 任务）
 
 ## 环境与配置
 

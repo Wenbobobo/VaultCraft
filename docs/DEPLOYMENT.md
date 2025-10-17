@@ -134,12 +134,14 @@ pnpm dev
 - `NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000`
 - `NEXT_PUBLIC_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm`
 - `NEXT_PUBLIC_ENABLE_DEMO_TRADING=0|1`（演示下单面板开关）
-- `NEXT_PUBLIC_ENABLE_WALLET=0|1`（显示“Connect Wallet”按钮；默认 0 隐藏）
+  （钱包按钮默认显示，无需开关）
 
 页面：
 - `/` Discover：展示金库列表（默认通过后端 API 获取）
 - `/vault/[id]`：展示 KPI 与 NAV 曲线与事件流（/nav_series 与 /events）
 - 可选 Exec 面板：设置 `NEXT_PUBLIC_ENABLE_DEMO_TRADING=1` 后可发起 open/close（默认 dry-run）
+ - `/browse`：专用的 Vault 浏览/搜索/排序页
+ - `/manager`：一键部署与管理 Vault（需后端运行以提供 Hardhat Artifact；部署成功后可选择写回 deployments/hyper-testnet.json）
 
 ## 4.3 快速创建私募金库（Task）
 
@@ -173,6 +175,14 @@ npx hardhat vault:deposit --network baseSepolia \
 - 向 Vault 批准并 `deposit` 若干资产，`ps()` 应保持不变
 - 过锁定期后 `redeem`，份额减少、资产到账
 - 如为私募：非白名单地址 `deposit` 应被拒绝
+
+### 5.1 私募演示准备（预白名单）
+为现场演示“邀请码加入 + 存入”顺畅，建议在演示前将评委地址加入私募金库白名单：
+```
+cd hardhat
+npx hardhat vault:whitelist --network hyperTestnet --vault 0xYourVault --user 0xJudgeAddress --allowed true
+```
+前端“邀请码”仅作演示 gating；真实门禁依赖链上白名单。
 
 ---
 

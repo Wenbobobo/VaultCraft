@@ -40,7 +40,7 @@
 - NEXT_PUBLIC_RPC_URL：前端只读 RPC，用于读取 ps/totalAssets 等链上数据
 - NEXT_PUBLIC_BACKEND_URL：后端 API 基地址（指标/事件）
 - NEXT_PUBLIC_ENABLE_DEMO_TRADING：是否展示受控下单面板（默认 0）
-- NEXT_PUBLIC_ENABLE_WALLET：是否显示“Connect Wallet”按钮（默认 0，未接入钱包时请隐藏）
+  （钱包按钮默认显示，无需配置）
 
 ---
 
