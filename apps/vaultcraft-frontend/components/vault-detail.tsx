@@ -125,6 +125,19 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
     }))
   }, [nav.series, navData])
 
+  const drawdown = useMemo(() => {
+    let max = 0
+    let dd = 0
+    for (const p of nav.series) {
+      if (p.nav > max) max = p.nav
+      if (max > 0) {
+        const cur = (max - p.nav) / max
+        if (cur > dd) dd = cur
+      }
+    }
+    return dd
+  }, [nav.series])
+
   return (
     <>
       <section className="py-12 border-b border-border/40">
@@ -194,6 +207,9 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
             <TabsContent value="performance" className="space-y-6">
               <Card className="p-6 gradient-card border-border/40">
                 <h3 className="text-lg font-semibold mb-6">NAV / PnL Curve</h3>
+                {drawdown > 0.1 && (
+                  <div className="mb-3 text-sm text-destructive">Alert: Drawdown {(drawdown * 100).toFixed(1)}% exceeds threshold</div>
+                )}
                 <PerformanceChart data={chartPoints} />
                 <div className="mt-4 flex items-center gap-3">
                   <Button size="sm" variant="outline" onClick={() => {

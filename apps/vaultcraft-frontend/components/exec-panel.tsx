@@ -11,6 +11,8 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reduceOnly, setReduceOnly] = useState(false)
+  const [leverage, setLeverage] = useState<string>("")
 
   function mapPretradeError(s: string | undefined): string {
     if (!s) return "Pretrade check failed"
@@ -32,6 +34,8 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
       pre.set("symbol", symbol)
       pre.set("size", size)
       pre.set("side", path.includes("open") ? side : "close")
+      if (reduceOnly) pre.set("reduce_only", "true")
+      if (leverage) pre.set("leverage", leverage)
       const preUrl = `${BACKEND_URL}/api/v1/pretrade?${pre.toString()}`
       const pr = await fetch(preUrl)
       const pj = await pr.json()
@@ -45,6 +49,8 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
       if (path.includes("open")) {
         params.set("size", size)
         params.set("side", side)
+        if (reduceOnly) params.set("reduce_only", "true")
+        if (leverage) params.set("leverage", leverage)
       } else {
         params.set("size", size)
       }
@@ -72,6 +78,10 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
           <option value="buy">Buy</option>
           <option value="sell">Sell</option>
         </select>
+        <input placeholder="Leverage" value={leverage} onChange={(e)=>setLeverage(e.target.value)} className="bg-transparent border rounded px-2 py-1 w-24" />
+        <label className="text-xs flex items-center gap-1">
+          <input type="checkbox" checked={reduceOnly} onChange={(e)=>setReduceOnly(e.target.checked)} /> reduce-only
+        </label>
         <Button size="sm" disabled={busy} onClick={() => send("/api/v1/exec/open")}>{busy ? "Sending..." : "Open"}</Button>
         <Button size="sm" variant="outline" disabled={busy} onClick={() => send("/api/v1/exec/close")}>{busy ? "Sending..." : "Close"}</Button>
       </div>

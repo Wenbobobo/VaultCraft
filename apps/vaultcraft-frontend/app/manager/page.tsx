@@ -34,6 +34,9 @@ export default function ManagerPage() {
   const [vaultAddr, setVaultAddr] = useState("")
   const [mgmtMsg, setMgmtMsg] = useState<string | null>(null)
   const validVault = ethers.isAddress(vaultAddr)
+  const [adapterAddr, setAdapterAddr] = useState("")
+  const [newManager, setNewManager] = useState("")
+  const [newGuardian, setNewGuardian] = useState("")
 
   async function deploy() {
     setDeployErr(null); setDeployMsg(null)
@@ -164,6 +167,30 @@ export default function ManagerPage() {
                     <Input id="ld" placeholder="1" />
                   </div>
                   <Button onClick={() => { const el = document.getElementById('ld') as HTMLInputElement; call('setLockMinDays', BigInt(el.value||'0')) }}>Update</Button>
+                </div>
+                <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="col-span-2">
+                    <Label>Adapter Address</Label>
+                    <Input value={adapterAddr} onChange={(e)=>setAdapterAddr(e.target.value)} placeholder="0x..." />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => call('setAdapter', adapterAddr, true)}>Allow</Button>
+                    <Button size="sm" variant="outline" onClick={() => call('setAdapter', adapterAddr, false)}>Revoke</Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 items-end">
+                  <div>
+                    <Label>New Manager</Label>
+                    <Input value={newManager} onChange={(e)=>setNewManager(e.target.value)} placeholder="0x..." />
+                  </div>
+                  <Button onClick={()=> call('setManager', newManager)}>Update Manager</Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 items-end">
+                  <div>
+                    <Label>New Guardian</Label>
+                    <Input value={newGuardian} onChange={(e)=>setNewGuardian(e.target.value)} placeholder="0x..." />
+                  </div>
+                  <Button onClick={()=> call('setGuardian', newGuardian)}>Update Guardian</Button>
                 </div>
                 {mgmtMsg && (<div className="text-xs text-muted-foreground break-all">{mgmtMsg}</div>)}
               </div>

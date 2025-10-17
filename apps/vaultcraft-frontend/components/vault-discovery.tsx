@@ -96,6 +96,7 @@ const fallbackVaults = [
 export function VaultDiscovery() {
   const [filter, setFilter] = useState<"all" | "public" | "private">("all")
   const [sortBy, setSortBy] = useState<"sharpe" | "aum" | "return">("sharpe")
+  const [q, setQ] = useState("")
 
   const [vaults, setVaults] = useState(fallbackVaults)
 
@@ -130,6 +131,11 @@ export function VaultDiscovery() {
 
   const filteredVaults = vaults
     .filter((vault) => filter === "all" || vault.type === filter)
+    .filter((v) => {
+      if (!q) return true
+      const s = q.toLowerCase()
+      return v.name.toLowerCase().includes(s) || v.id.toLowerCase().includes(s)
+    })
     .sort((a, b) => {
       if (sortBy === "sharpe") return b.sharpe - a.sharpe
       if (sortBy === "aum") return b.aum - a.aum
@@ -154,6 +160,7 @@ export function VaultDiscovery() {
           </Tabs>
 
           <div className="flex items-center gap-2">
+            <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by name or address" className="bg-transparent border rounded px-2 py-1 w-64" />
             <Button variant={sortBy === "sharpe" ? "secondary" : "ghost"} size="sm" onClick={() => setSortBy("sharpe")}>
               Sharpe
             </Button>
