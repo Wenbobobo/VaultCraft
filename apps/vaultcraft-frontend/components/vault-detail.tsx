@@ -110,8 +110,8 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
             <div className="flex items-center gap-3 mb-4">
               <h1 className="text-3xl font-bold">{vault.name}</h1>
               <Badge variant="secondary" className="gap-1.5">
-                {mockVault.type === "public" ? <Eye className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
-                <span className="capitalize">{mockVault.type}</span>
+                {vault.type === "public" ? <Eye className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                <span className="capitalize">{vault.type}</span>
               </Badge>
             </div>
             <p className="text-muted-foreground font-mono text-sm">{vault.id}</p>

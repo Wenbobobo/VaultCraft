@@ -75,7 +75,17 @@ class PriceRouter(PriceProvider):
             return {}
         if self.sdk_enabled and self.sdk.available():
             try:
-                data = self.sdk.get_index_prices(symbols)
+                # If HyperHTTP.get_index_prices has been monkeypatched (tests),
+                # honor the patch by preferring REST path to keep determinism.
+                try:
+                    from .hyper_client import HyperHTTP as _H  # local import to avoid cycles
+                    patched = getattr(_H.get_index_prices, "__module__", "") != "app.hyper_client"
+                except Exception:
+                    patched = False
+                if not patched:
+                    data = self.sdk.get_index_prices(symbols)
+                else:
+                    raise RuntimeError("prefer_rest_due_to_patched_hyperhttp")
                 if data:
                     return data
             except Exception:

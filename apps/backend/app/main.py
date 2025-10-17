@@ -308,6 +308,18 @@ _user_listener: UserEventsListener | None = None
 @app.on_event("startup")
 def _startup():
     global _snapshot_daemon, _user_listener
+    # Ensure request-scoped determinism for tests and fresh boot by clearing caches
+    try:
+        try:
+            _price_provider.cache.clear()
+        except Exception:
+            pass
+        try:
+            _nav_cache.clear()
+        except Exception:
+            pass
+    except Exception:
+        pass
     if settings.ENABLE_SNAPSHOT_DAEMON:
         def list_ids() -> List[str]:
             return [v["id"] for v in _vault_registry()]

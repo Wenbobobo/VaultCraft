@@ -66,10 +66,12 @@ export function Header() {
           <Button variant="ghost" size="sm" className="hidden sm:flex">
             Documentation
           </Button>
-          <Button size="sm" className="gap-2">
-            <Wallet className="h-4 w-4" />
-            Connect Wallet
-          </Button>
+          {process.env.NEXT_PUBLIC_ENABLE_WALLET === '1' ? (
+            <Button size="sm" className="gap-2">
+              <Wallet className="h-4 w-4" />
+              Connect Wallet
+            </Button>
+          ) : null}
         </div>
       </div>
     </header>
