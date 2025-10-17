@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.user_listener import _extract_fills, process_user_event
 from app.positions import get_profile
+from app.events import store as event_store
 
 
 def test_extract_fills_various_shapes():
@@ -26,3 +27,12 @@ def test_process_user_event_applies(monkeypatch, tmp_path):
     prof = get_profile(vid)
     assert abs(prof["positions"].get("ETH", 0.0) - 1.0) < 1e-9
 
+
+def test_process_user_event_logs_ws_source(monkeypatch, tmp_path):
+    monkeypatch.setenv("POSITIONS_FILE", str(tmp_path / "positions.json"))
+    vid = "0xLISTENER"
+    evt = {"fills": [{"name": "BTC", "side": "sell", "sz": 0.5}]}
+    event_store._events.clear()
+    process_user_event(vid, evt)
+    events = event_store.list(vid)
+    assert any(e.get("type") == "fill" and e.get("source") == "ws" for e in events)

@@ -21,6 +21,7 @@ interface DepositModalProps {
 }
 
 import { useWallet } from "@/hooks/use-wallet"
+import { useToast } from "@/hooks/use-toast"
 import { ethers } from "ethers"
 
 const ERC20_ABI = [
@@ -40,6 +41,7 @@ export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: Depo
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const { connected, address, connect, ensureHyperChain, isHyper } = useWallet()
+  const { toast } = useToast()
 
   const estimatedShares = amount ? (Number.parseFloat(amount) / vault.unitNav).toFixed(2) : "0.00"
 
@@ -78,10 +80,12 @@ export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: Depo
       setMsg(`Depositing... ${tx.hash}`)
       await tx.wait()
       setMsg(`Deposit confirmed: ${tx.hash}`)
+      toast({ title: "Deposit confirmed", description: `Tx ${tx.hash.slice(0, 10)}...` })
       onOpenChange(false)
     } catch (e: any) {
       const s = e?.shortMessage || e?.message || String(e)
       setErr(s)
+      toast({ title: "Deposit failed", description: s, variant: "destructive" })
     } finally {
       setBusy(false)
     }

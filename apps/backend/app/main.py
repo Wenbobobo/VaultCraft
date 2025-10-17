@@ -52,9 +52,19 @@ def api_status():
     except Exception:
         rpc = {"rpc": getattr(settings, "HYPER_RPC_URL", None), "chainId": None, "block": None}
     # runtime daemon states
+    listener_state = "disabled"
+    if flags["enable_live_exec"] and flags["enable_user_ws"]:
+        listener_state = "idle"
+        if _user_listener and _user_listener.is_running():
+            listener_state = "running"
+    snapshot_state = "disabled"
+    if flags["enable_snapshot_daemon"]:
+        snapshot_state = "idle"
+        if _snapshot_daemon and _snapshot_daemon.is_running():
+            snapshot_state = "running"
     state = {
-        "listener_active": bool(_user_listener is not None),
-        "snapshot_active": bool(_snapshot_daemon is not None),
+        "listener": listener_state,
+        "snapshot": snapshot_state,
     }
     return {"ok": True, "flags": flags, "network": rpc, "state": state}
 

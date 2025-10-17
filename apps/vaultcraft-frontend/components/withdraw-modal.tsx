@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AlertCircle } from "lucide-react"
 import { useWallet } from "@/hooks/use-wallet"
+import { useToast } from "@/hooks/use-toast"
 import { ethers } from "ethers"
 
 const VAULT_ABI = [
@@ -24,6 +25,7 @@ export function WithdrawModal({ open, onOpenChange, vaultId }: { open: boolean; 
   const [lockedUntil, setLockedUntil] = useState<number | null>(null)
   const [ps, setPs] = useState<number>(1)
   const { connected, address, connect, ensureHyperChain, isHyper } = useWallet()
+  const { toast } = useToast()
 
   useEffect(() => {
     let alive = true
@@ -64,10 +66,12 @@ export function WithdrawModal({ open, onOpenChange, vaultId }: { open: boolean; 
       setMsg(`Redeeming... ${tx.hash}`)
       await tx.wait()
       setMsg(`Redeem confirmed: ${tx.hash}`)
+      toast({ title: "Withdraw confirmed", description: `Tx ${tx.hash.slice(0, 10)}...` })
       onOpenChange(false)
     } catch (e: any) {
       const s = e?.shortMessage || e?.message || String(e)
       setErr(s)
+      toast({ title: "Withdraw failed", description: s, variant: "destructive" })
     } finally {
       setBusy(false)
     }

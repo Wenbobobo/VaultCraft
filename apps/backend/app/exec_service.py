@@ -10,6 +10,7 @@ from .positions import apply_fill, apply_close, get_profile
 from .navcalc import snapshot_now
 from .price_provider import PriceRouter
 import json
+from hyperliquid.exchange import Exchange  # type: ignore
 
 
 def _payload_has_error(payload: dict | list | str | None) -> bool:
@@ -42,7 +43,6 @@ class HyperSDKDriver(ExecDriver):
     def __init__(self, base_url: str | None = None, private_key: str | None = None):
         # Deferred import
         try:
-            from hyperliquid.exchange import Exchange, OrderType  # type: ignore
             from eth_account import Account  # type: ignore
         except Exception as e:  # pragma: no cover
             raise RuntimeError("hyperliquid SDK not available") from e
@@ -56,7 +56,6 @@ class HyperSDKDriver(ExecDriver):
         if not pk:
             raise RuntimeError("missing HYPER_TRADER_PRIVATE_KEY for live exec")
         self._Exchange = Exchange
-        self._OrderType = OrderType
         self._wallet = Account.from_key(pk)
         self._base_url = base_url or env.HYPER_API_URL
         self._exch = Exchange(wallet=self._wallet, base_url=self._base_url)
@@ -64,14 +63,30 @@ class HyperSDKDriver(ExecDriver):
     def open(self, order: Order) -> Dict[str, Any]:
         is_buy = True if order.side == "buy" else False
         if order.reduce_only:
-            res = self._exch.order(name=order.symbol, is_buy=is_buy, sz=float(order.size), limit_px=0.0, order_type=self._OrderType.Market, reduce_only=True)
+            default_slippage = getattr(self._exch, "DEFAULT_SLIPPAGE", 0.05)
+            slippage = min(default_slippage, 0.001)
+            px = float(self._exch._slippage_price(order.symbol, is_buy, slippage, None))  # type: ignore[attr-defined]
+            res = self._exch.order(
+                name=order.symbol,
+                is_buy=is_buy,
+                sz=float(order.size),
+                limit_px=px,
+                order_type={"limit": {"tif": "Ioc"}},
+                reduce_only=True,
+            )
         else:
-            res = self._exch.market_open(name=order.symbol, is_buy=is_buy, sz=float(order.size))
+            default_slippage = getattr(self._exch, "DEFAULT_SLIPPAGE", 0.05)
+            slippage = min(default_slippage, 0.001)
+            res = self._exch.market_open(name=order.symbol, is_buy=is_buy, sz=float(order.size), slippage=slippage)
         return {"ack": res}
 
     def close(self, symbol: str, size: float | None = None) -> Dict[str, Any]:
-        # Hyper SDK expects 'coin' for market_close
-        res = self._exch.market_close(coin=symbol, sz=(float(size) if size is not None else None))
+        slippage = min(getattr(self._exch, "DEFAULT_SLIPPAGE", 0.05), 0.001)
+        res = self._exch.market_close(
+            coin=symbol,
+            sz=(float(size) if size is not None else None),
+            slippage=slippage,
+        )
         return {"ack": res}
 
 

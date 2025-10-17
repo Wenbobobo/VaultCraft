@@ -64,9 +64,9 @@ export function PortfolioView() {
   }, [address])
 
   const totalValue = useMemo(() => positions.reduce((s, p) => s + p.shares * p.unitNav, 0), [positions])
-  const totalCost = useMemo(() => positions.reduce((s, p) => s + p.shares * p.unitNav, 0), [positions]) // placeholder
-  const totalPnL = 0 // without historical cost basis; keep zero for demo
-  const totalPnLPercent = 0
+  const totalCost = useMemo(() => positions.reduce((s, p) => s + p.shares * 1.0, 0), [positions])
+  const totalPnL = totalValue - totalCost
+  const totalPnLPercent = totalCost > 0 ? (totalValue / totalCost - 1) * 100 : 0
 
   return (
     <section className="py-12">
@@ -118,6 +118,7 @@ export function PortfolioView() {
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">Current Value</div>
                       <div className="font-semibold font-mono">${currentValue.toFixed(2)}</div>
+                      <div className="text-[10px] text-muted-foreground">Assumes entry NAV ≈ 1.0</div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">Status</div>

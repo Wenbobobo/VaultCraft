@@ -41,3 +41,25 @@ def test_api_nav_and_events():
     assert r2.status_code == 200
     assert isinstance(r2.json()["events"], list)
 
+
+def test_artifacts_endpoints():
+    c = TestClient(app)
+    r = c.get("/api/v1/artifacts/vault")
+    assert r.status_code == 200
+    body = r.json()
+    assert ("abi" in body) or ("error" in body)
+    r2 = c.get("/api/v1/artifacts/mockerc20")
+    assert r2.status_code == 200
+    b2 = r2.json()
+    assert ("abi" in b2) or ("error" in b2)
+
+
+def test_status_has_state_fields():
+    c = TestClient(app)
+    r = c.get("/api/v1/status")
+    assert r.status_code == 200
+    b = r.json()
+    assert b.get("ok") is True
+    state = b.get("state")
+    assert isinstance(state, dict)
+    assert "listener" in state and "snapshot" in state

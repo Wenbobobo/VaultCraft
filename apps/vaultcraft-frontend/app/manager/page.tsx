@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { useWallet } from "@/hooks/use-wallet"
 import { BACKEND_URL, DEFAULT_ASSET_ADDRESS } from "@/lib/config"
 import { ethers } from "ethers"
 import { ExecPanel } from "@/components/exec-panel"
+import Link from "next/link"
 
 const MGMT_ABI = [
   // writes
@@ -30,7 +31,7 @@ const MGMT_ABI = [
 ]
 
 export default function ManagerPage() {
-  const { connect, isHyper } = useWallet()
+  const { connect, isHyper, address } = useWallet()
   const [asset, setAsset] = useState(DEFAULT_ASSET_ADDRESS)
   const [name, setName] = useState("VaultCraft")
   const [symbol, setSymbol] = useState("VSHARE")
@@ -47,6 +48,61 @@ export default function ManagerPage() {
   const [newGuardian, setNewGuardian] = useState("")
   const [readInfo, setReadInfo] = useState<any | null>(null)
   const [devMsg, setDevMsg] = useState<string | null>(null)
+  const [assetInfo, setAssetInfo] = useState<{ symbol?: string; decimals?: number } | null>(null)
+  const [assetBalance, setAssetBalance] = useState<string | null>(null)
+  const [assetLoading, setAssetLoading] = useState(false)
+  const [lastDeployed, setLastDeployed] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (!ethers.isAddress(asset)) {
+        setAssetInfo(null)
+        setAssetBalance(null)
+        return
+      }
+      try {
+        setAssetLoading(true)
+        const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_RPC_URL)
+        const erc = new ethers.Contract(
+          asset,
+          [
+            "function symbol() view returns (string)",
+            "function decimals() view returns (uint8)",
+            "function balanceOf(address) view returns (uint256)",
+          ],
+          provider
+        )
+        const [sym, decRaw] = await Promise.all([
+          erc.symbol().catch(() => ""),
+          erc.decimals().catch(() => 18),
+        ])
+        let bal: string | null = null
+        const dec = Number(decRaw)
+        if (address) {
+          try {
+            const raw = await erc.balanceOf(address)
+            bal = ethers.formatUnits(raw, dec)
+          } catch {}
+        }
+        if (!cancelled) {
+          setAssetInfo({ symbol: sym || undefined, decimals: dec })
+          setAssetBalance(bal)
+        }
+      } catch {
+        if (!cancelled) {
+          setAssetInfo(null)
+          setAssetBalance(null)
+        }
+      } finally {
+        if (!cancelled) setAssetLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [asset, address])
 
   async function deploy() {
     setDeployErr(null); setDeployMsg(null)
@@ -69,6 +125,7 @@ export default function ManagerPage() {
       const addr = await deployed.getAddress()
       setVaultAddr(addr)
       setDeployMsg(`Deployed: ${addr}`)
+      setLastDeployed(addr)
       // optional: register for discovery
       try { await fetch(`${BACKEND_URL}/api/v1/register_deployment?vault=${addr}&asset=${asset}`, { method: 'POST' }) } catch {}
     } catch (e: any) {
@@ -147,17 +204,56 @@ export default function ManagerPage() {
       <Header />
       <main className="flex-1">
         <section className="py-12">
-          <div className="container mx-auto px-4 grid gap-6 lg:grid-cols-2">
+          <div className="container mx-auto px-4 space-y-6">
             <Card className="p-6 gradient-card border-border/40">
+              <h2 className="text-lg font-semibold mb-4">Launch Checklist</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1 text-sm">
+                  <div className="text-muted-foreground">Asset Address</div>
+                  <div className="font-mono text-xs break-all">{asset || "(enter ERC20 address)"}</div>
+                  {assetLoading ? (
+                    <div className="text-xs text-muted-foreground">Loading asset metadata…</div>
+                  ) : assetInfo ? (
+                    <div className="text-xs text-muted-foreground">{assetInfo.symbol ? `${assetInfo.symbol} · ` : ""}{assetInfo.decimals ?? "?"} decimals</div>
+                  ) : (
+                    <div className="text-xs text-destructive">Unable to read token metadata</div>
+                  )}
+                </div>
+                <div className="space-y-1 text-sm">
+                  <div className="text-muted-foreground">Manager Balance</div>
+                  <div className="font-mono text-xs">{assetBalance ? `${Number(assetBalance).toFixed(4)} ${assetInfo?.symbol || "tokens"}` : "(connect wallet)"}</div>
+                  <div className="text-xs text-muted-foreground">Ensure sufficient USDC for self-stake & investor testing.</div>
+                </div>
+                <div className="space-y-1 text-sm">
+                  <div className="text-muted-foreground">Network</div>
+                  <div className="text-xs">{isHyper ? "Hyper Testnet (998)" : "Switch wallet to Hyper Testnet"}</div>
+                </div>
+                <div className="space-y-1 text-sm">
+                  <div className="text-muted-foreground">Last Deployed Vault</div>
+                  {lastDeployed ? (
+                    <div className="text-xs">
+                      <Link href={`/vault/${lastDeployed}`} className="text-primary underline">{lastDeployed.slice(0, 10)}…</Link>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">Deploy to populate</div>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card className="p-6 gradient-card border-border/40">
               <h2 className="text-lg font-semibold mb-4">Deploy New Vault</h2>
               <div className="space-y-3">
                 <div>
                   <Label>Asset ERC20 Address</Label>
                   <Input value={asset} onChange={(e) => setAsset(e.target.value)} placeholder="0x..." />
-                  <div className="mt-2 flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={deployMockAsset}>Dev: Deploy MockERC20 + Mint</Button>
-                    {devMsg && (<div className="text-xs text-muted-foreground break-all">{devMsg}</div>)}
-                  </div>
+                  {!DEFAULT_ASSET_ADDRESS && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={deployMockAsset}>Dev: Deploy MockERC20 + Mint</Button>
+                      {devMsg && (<div className="text-xs text-muted-foreground break-all">{devMsg}</div>)}
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -187,11 +283,11 @@ export default function ManagerPage() {
                 {deployErr && (<div className="text-sm text-destructive">{deployErr}</div>)}
                 {deployMsg && (<div className="text-xs text-muted-foreground break-all">{deployMsg}</div>)}
               </div>
-            </Card>
+              </Card>
 
-            <Card className="p-6 gradient-card border-border/40">
-              <h2 className="text-lg font-semibold mb-4">Manage Vault</h2>
-              <div className="space-y-3">
+              <Card className="p-6 gradient-card border-border/40">
+                <h2 className="text-lg font-semibold mb-4">Manage Vault</h2>
+                <div className="space-y-3">
                 <div>
                   <Label>Vault Address</Label>
                   <Input value={vaultAddr} onChange={(e) => setVaultAddr(e.target.value)} placeholder="0x..." />
@@ -270,18 +366,19 @@ export default function ManagerPage() {
                   </div>
                   <Button onClick={()=> call('setGuardian', newGuardian)}>Update Guardian</Button>
                 </div>
-                {mgmtMsg && (<div className="text-xs text-muted-foreground break-all">{mgmtMsg}</div>)}
-              </div>
-            </Card>
+                  {mgmtMsg && (<div className="text-xs text-muted-foreground break-all">{mgmtMsg}</div>)}
+                </div>
+              </Card>
 
-            <Card className="p-6 gradient-card border-border/40">
-              <h2 className="text-lg font-semibold mb-4">Perps Execution (Manager)</h2>
-              {!validVault ? (
-                <div className="text-sm text-muted-foreground">Enter a valid Vault address above to enable execution panel.</div>
-              ) : (
-                <ExecPanel vaultId={vaultAddr} />
-              )}
-            </Card>
+              <Card className="p-6 gradient-card border-border/40">
+                <h2 className="text-lg font-semibold mb-4">Perps Execution (Manager)</h2>
+                {!validVault ? (
+                  <div className="text-sm text-muted-foreground">Enter a valid Vault address above to enable execution panel.</div>
+                ) : (
+                  <ExecPanel vaultId={vaultAddr} />
+                )}
+              </Card>
+            </div>
           </div>
         </section>
       </main>

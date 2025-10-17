@@ -39,3 +39,5 @@ class SnapshotDaemon:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
 
+    def is_running(self) -> bool:
+        return bool(self._thread and self._thread.is_alive())

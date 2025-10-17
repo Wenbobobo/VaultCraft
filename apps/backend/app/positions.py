@@ -6,9 +6,23 @@ from pathlib import Path
 from typing import Dict, Any
 
 
+def _repo_root() -> Path:
+    root = Path(__file__).resolve()
+    for _ in range(10):
+        if (root / ".git").exists() or (root / "README.md").exists():
+            break
+        if root.parent == root:
+            break
+        root = root.parent
+    return root
+
+
 def _positions_path() -> Path:
-    p = os.getenv("POSITIONS_FILE") or str(Path("deployments") / "positions.json")
-    return Path(p)
+    p = os.getenv("POSITIONS_FILE") or "deployments/positions.json"
+    path = Path(p)
+    if not path.is_absolute():
+        path = _repo_root() / path
+    return path
 
 
 def _read_all() -> Dict[str, Any]:
