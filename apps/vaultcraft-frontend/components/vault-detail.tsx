@@ -7,12 +7,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Lock, Eye, TrendingUp, TrendingDown, ArrowUpRight, Wallet } from "lucide-react"
 import { PerformanceChart } from "@/components/performance-chart"
 import { DepositModal } from "@/components/deposit-modal"
+import { WithdrawModal } from "@/components/withdraw-modal"
 import { useEffect, useMemo, useState } from "react"
 import { getVault } from "@/lib/api"
 import { useOnchainVault } from "@/hooks/use-onchain-vault"
 import { ExecPanel } from "@/components/exec-panel"
 import { EventsFeed } from "@/components/events-feed"
 import { useNavSeries } from "@/hooks/use-nav-series"
+import { PositionsHistory } from "@/components/positions-history"
+import { useWallet } from "@/hooks/use-wallet"
+import { Input } from "@/components/ui/input"
+import { ethers } from "ethers"
 
 type UIState = {
   id: string
@@ -52,10 +57,15 @@ const fallbackVault: UIState = {
 
 export function VaultDetail({ vaultId }: { vaultId: string }) {
   const [showDeposit, setShowDeposit] = useState(false)
+  const [showWithdraw, setShowWithdraw] = useState(false)
   const [vault, setVault] = useState<UIState>(fallbackVault)
+  const [asset, setAsset] = useState<string | null>(null)
   const [navData, setNavData] = useState<number[]>([])
   const chain = useOnchainVault(vaultId)
   const nav = useNavSeries(vaultId, 5000, 180)
+  const [risk, setRisk] = useState<{ minLev?: number; maxLev?: number; maxNotional?: number; symbols?: string } | null>(null)
+  const { connected } = useWallet()
+  const validVault = ethers.isAddress(vaultId)
 
   useEffect(() => {
     let alive = true
@@ -80,8 +90,21 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
           totalShares: v.totalShares,
         }
         setVault(ui)
+        if (v.asset) setAsset(v.asset)
       })
       .catch(() => {})
+    // load risk flags from backend status
+    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}/api/v1/status`).then(async (r) => {
+      try {
+        const b = await r.json()
+        setRisk({
+          minLev: b?.flags?.exec_min_leverage,
+          maxLev: b?.flags?.exec_max_leverage,
+          maxNotional: b?.flags?.exec_max_notional_usd,
+          symbols: b?.flags?.allowed_symbols,
+        })
+      } catch {}
+    }).catch(() => {})
     return () => {
       alive = false
     }
@@ -140,11 +163,11 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button size="lg" className="gap-2" onClick={() => setShowDeposit(true)}>
+            <Button size="lg" className="gap-2" onClick={() => setShowDeposit(true)} disabled={!validVault}>
               <Wallet className="h-4 w-4" />
               Deposit
             </Button>
-            <Button size="lg" variant="outline" className="gap-2 bg-transparent">
+            <Button size="lg" variant="outline" className="gap-2 bg-transparent" onClick={() => setShowWithdraw(true)} disabled={!validVault}>
               Withdraw
             </Button>
             <Button size="lg" variant="ghost" className="gap-2">
@@ -158,20 +181,31 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
       <section className="py-12">
         <div className="container mx-auto px-4">
           <Tabs defaultValue="performance" className="w-full">
-            <TabsList className="mb-8">
-              <TabsTrigger value="performance">Performance</TabsTrigger>
-              <TabsTrigger value="holdings">Holdings</TabsTrigger>
-              <TabsTrigger value="transactions">Transactions</TabsTrigger>
-              <TabsTrigger value="info">Info</TabsTrigger>
-              {process.env.NEXT_PUBLIC_ENABLE_DEMO_TRADING === '1' && (
-                <TabsTrigger value="exec">Exec</TabsTrigger>
-              )}
-            </TabsList>
+          <TabsList className="mb-8">
+            <TabsTrigger value="performance">Performance</TabsTrigger>
+            <TabsTrigger value="holdings">Holdings</TabsTrigger>
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="info">Info</TabsTrigger>
+            {process.env.NEXT_PUBLIC_ENABLE_DEMO_TRADING === '1' && (
+              <TabsTrigger value="exec">Exec</TabsTrigger>
+            )}
+          </TabsList>
 
             <TabsContent value="performance" className="space-y-6">
               <Card className="p-6 gradient-card border-border/40">
                 <h3 className="text-lg font-semibold mb-6">NAV / PnL Curve</h3>
                 <PerformanceChart data={chartPoints} />
+                <div className="mt-4 flex items-center gap-3">
+                  <Button size="sm" variant="outline" onClick={() => {
+                    // simulate a -10% shock by adding a snapshot
+                    const last = nav.series.length ? nav.series[nav.series.length - 1].nav : vault.unitNav
+                    const shock = Math.max(0, last * 0.9)
+                    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}/api/v1/nav/snapshot/${vaultId}?nav=${shock}`, { method: 'POST' })
+                      .then(() => nav.refresh())
+                      .catch(() => {})
+                  }}>Simulate -10% Shock</Button>
+                  <span className="text-xs text-muted-foreground">Use to demonstrate alerting/drawdown handling</span>
+                </div>
               </Card>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -197,7 +231,8 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
                 {vault.type === "public" ? (
                 <Card className="p-6 gradient-card border-border/40">
                   <h3 className="text-lg font-semibold mb-4">Current Holdings</h3>
-                  <p className="text-muted-foreground">Holdings data will be displayed here for public vaults.</p>
+                  <p className="text-muted-foreground mb-4">Public vaults display holdings and history (derived from events).</p>
+                  <PositionsHistory vaultId={vaultId} />
                 </Card>
               ) : (
                 <Card className="p-6 gradient-card border-border/40 text-center">
@@ -241,6 +276,24 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
                     <span className="text-muted-foreground">Total Shares</span>
                     <span className="font-semibold font-mono">{(chain.totalSupply ?? vault.totalShares).toLocaleString()}</span>
                   </div>
+                  {risk && (
+                    <>
+                      <div className="pt-4 border-t border-border/40" />
+                      <div className="text-sm font-semibold">Risk Controls (Exec Service)</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">Allowed Symbols</span><span className="font-mono">{risk.symbols}</span></div>
+                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">Leverage Range</span><span className="font-mono">{risk.minLev} - {risk.maxLev}x</span></div>
+                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">Max Notional</span><span className="font-mono">${risk.maxNotional?.toLocaleString()}</span></div>
+                      </div>
+                    </>
+                  )}
+                  {vault.type === 'private' && (
+                    <>
+                      <div className="pt-4 border-t border-border/40" />
+                      <div className="text-sm font-semibold mb-2">Join Private Vault</div>
+                      <JoinPrivate vaultId={vaultId} enabled={connected} />
+                    </>
+                  )}
                 </div>
               </Card>
             </TabsContent>
@@ -254,7 +307,26 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
         </div>
       </section>
 
-      <DepositModal open={showDeposit} onOpenChange={setShowDeposit} vault={vault} />
+      <DepositModal open={showDeposit} onOpenChange={setShowDeposit} vault={vault} vaultId={vaultId} asset={asset || undefined} />
+      <WithdrawModal open={showWithdraw} onOpenChange={setShowWithdraw} vaultId={vaultId} />
     </>
+  )
+}
+
+function JoinPrivate({ vaultId, enabled }: { vaultId: string; enabled: boolean }) {
+  const [code, setCode] = useState("")
+  const [ok, setOk] = useState<boolean>(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  return (
+    <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+      <Input placeholder="Invite code" value={code} onChange={(e) => setCode(e.target.value)} className="w-64" />
+      <Button size="sm" disabled={!enabled || !code} onClick={() => {
+        // Demo gating: accept any non-empty code
+        setOk(true)
+        setMsg("Invite accepted (demo). Please deposit with wallet; on-chain whitelist must be configured beforehand.")
+      }}>Join</Button>
+      {ok && (<span className="text-xs text-green-400">Joined (demo)</span>)}
+      {msg && (<div className="text-xs text-muted-foreground">{msg}</div>)}
+    </div>
   )
 }

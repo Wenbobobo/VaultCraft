@@ -3,8 +3,10 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Wallet } from "lucide-react"
+import { useWallet } from "@/hooks/use-wallet"
 
 export function Header() {
+  const { connected, address, connect, isHyper } = useWallet()
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
@@ -44,14 +46,20 @@ export function Header() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-6">
-            <Link href="/" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">
-              Discover
+            <Link href="/browse" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">
+              Browse
             </Link>
             <Link
               href="/portfolio"
               className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth"
             >
               Portfolio
+            </Link>
+            <Link
+              href="/manager"
+              className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth"
+            >
+              Manager
             </Link>
             <Link
               href="/about"
@@ -66,12 +74,17 @@ export function Header() {
           <Button variant="ghost" size="sm" className="hidden sm:flex">
             Documentation
           </Button>
-          {process.env.NEXT_PUBLIC_ENABLE_WALLET === '1' ? (
-            <Button size="sm" className="gap-2">
+          {connected ? (
+            <Button size="sm" variant={isHyper ? "default" : "destructive"} className="gap-2" disabled>
+              <Wallet className="h-4 w-4" />
+              {address?.slice(0, 6)}...{address?.slice(-4)} {isHyper ? "" : "(Wrong Network)"}
+            </Button>
+          ) : (
+            <Button size="sm" className="gap-2" onClick={() => connect()}>
               <Wallet className="h-4 w-4" />
               Connect Wallet
             </Button>
-          ) : null}
+          )}
         </div>
       </div>
     </header>

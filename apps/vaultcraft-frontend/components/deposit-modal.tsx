@@ -10,6 +10,8 @@ import { AlertCircle } from "lucide-react"
 interface DepositModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  vaultId: string
+  asset?: string
   vault: {
     name: string
     unitNav: number
@@ -18,10 +20,72 @@ interface DepositModalProps {
   }
 }
 
-export function DepositModal({ open, onOpenChange, vault }: DepositModalProps) {
+import { useWallet } from "@/hooks/use-wallet"
+import { ethers } from "ethers"
+
+const ERC20_ABI = [
+  "function approve(address spender, uint256 value) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function balanceOf(address owner) view returns (uint256)",
+]
+const VAULT_ABI = [
+  "function asset() view returns (address)",
+  "function deposit(uint256 assets, address receiver) returns (uint256 shares)",
+]
+
+export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: DepositModalProps) {
   const [amount, setAmount] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const { connected, address, connect, ensureHyperChain, isHyper } = useWallet()
 
   const estimatedShares = amount ? (Number.parseFloat(amount) / vault.unitNav).toFixed(2) : "0.00"
+
+  async function doDeposit() {
+    setErr(null)
+    setMsg(null)
+    try {
+      if (!ethers.isAddress(vaultId)) throw new Error("Invalid vault address")
+      if (!connected) {
+        await connect()
+      }
+      if (!isHyper) await ensureHyperChain()
+      const eth = (window as any).ethereum
+      if (!eth) throw new Error("No wallet provider")
+      const provider = new ethers.BrowserProvider(eth)
+      const signer = await provider.getSigner()
+      const v = new ethers.Contract(vaultId, VAULT_ABI, signer)
+      let assetAddr = asset
+      if (!assetAddr) {
+        assetAddr = await v.asset()
+      }
+      if (!ethers.isAddress(assetAddr)) throw new Error("Invalid asset address")
+      const erc = new ethers.Contract(assetAddr, ERC20_ABI, signer)
+      const decimals: number = await erc.decimals()
+      const amt = ethers.parseUnits(amount || "0", decimals)
+      if (amt <= 0n) throw new Error("Invalid amount")
+      setBusy(true)
+      // approve if needed
+      const allowance: bigint = await erc.allowance(address, vaultId)
+      if (allowance < amt) {
+        const txa = await erc.approve(vaultId, amt)
+        setMsg(`Approving... ${txa.hash}`)
+        await txa.wait()
+      }
+      const tx = await v.deposit(amt, address)
+      setMsg(`Depositing... ${tx.hash}`)
+      await tx.wait()
+      setMsg(`Deposit confirmed: ${tx.hash}`)
+      onOpenChange(false)
+    } catch (e: any) {
+      const s = e?.shortMessage || e?.message || String(e)
+      setErr(s)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -67,12 +131,14 @@ export function DepositModal({ open, onOpenChange, vault }: DepositModalProps) {
           </div>
         </div>
 
+        {err && (<div className="text-sm text-destructive mb-2">{err}</div>)}
+        {msg && (<div className="text-xs text-muted-foreground mb-2 break-all">{msg}</div>)}
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1" disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={() => onOpenChange(false)} className="flex-1">
-            Confirm Deposit
+          <Button onClick={() => doDeposit()} className="flex-1" disabled={busy}>
+            {busy ? "Processing..." : "Confirm Deposit"}
           </Button>
         </div>
       </DialogContent>

@@ -5,32 +5,68 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { TrendingUp, TrendingDown, Clock, ArrowUpRight } from "lucide-react"
 import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
+import { useWallet } from "@/hooks/use-wallet"
+import { getVaults } from "@/lib/api"
+import { ethers } from "ethers"
+import { WithdrawModal } from "@/components/withdraw-modal"
 
-// Mock portfolio data
-const mockPositions = [
-  {
-    vaultId: "0x1234...5678",
-    vaultName: "Alpha Momentum Strategy",
-    shares: 1250.5,
-    costBasis: 1.12,
-    currentNav: 1.245,
-    unlockDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-  },
-  {
-    vaultId: "0xabcd...efgh",
-    vaultName: "DeFi Yield Optimizer",
-    shares: 850.25,
-    costBasis: 1.05,
-    currentNav: 1.18,
-    unlockDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-  },
-]
+type Position = {
+  vaultId: string
+  vaultName: string
+  shares: number
+  unitNav: number
+  unlockDate: Date | null
+}
 
 export function PortfolioView() {
-  const totalValue = mockPositions.reduce((sum, pos) => sum + pos.shares * pos.currentNav, 0)
-  const totalCost = mockPositions.reduce((sum, pos) => sum + pos.shares * pos.costBasis, 0)
-  const totalPnL = totalValue - totalCost
-  const totalPnLPercent = (totalPnL / totalCost) * 100
+  const { connected, address } = useWallet()
+  const [positions, setPositions] = useState<Position[]>([])
+  const [wdOpen, setWdOpen] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    async function load() {
+      try {
+        const list = await getVaults()
+        if (!list.length || !address) { setPositions([]); return }
+        const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_RPC_URL)
+        const VAULT_ABI = [
+          "function balanceOf(address) view returns (uint256)",
+          "function ps() view returns (uint256)",
+          "function nextRedeemAllowed(address) view returns (uint256)",
+        ]
+        const out: Position[] = []
+        for (const v of list) {
+          const c = new ethers.Contract(v.id, VAULT_ABI, provider)
+          try {
+            const [bal, ps, lock] = await Promise.all([
+              c.balanceOf(address), c.ps(), c.nextRedeemAllowed(address)
+            ])
+            const shares = Number(bal) / 1e18
+            if (shares > 0) {
+              out.push({
+                vaultId: v.id,
+                vaultName: v.name,
+                shares,
+                unitNav: Number(ps) / 1e18,
+                unlockDate: Number(lock) > 0 ? new Date(Number(lock) * 1000) : null,
+              })
+            }
+          } catch {}
+        }
+        if (alive) setPositions(out)
+      } catch {}
+    }
+    load()
+    const id = setInterval(load, 15000)
+    return () => { alive = false; clearInterval(id) }
+  }, [address])
+
+  const totalValue = useMemo(() => positions.reduce((s, p) => s + p.shares * p.unitNav, 0), [positions])
+  const totalCost = useMemo(() => positions.reduce((s, p) => s + p.shares * p.unitNav, 0), [positions]) // placeholder
+  const totalPnL = 0 // without historical cost basis; keep zero for demo
+  const totalPnLPercent = 0
 
   return (
     <section className="py-12">
@@ -62,12 +98,9 @@ export function PortfolioView() {
         </div>
 
         <div className="space-y-4">
-          {mockPositions.map((position) => {
-            const currentValue = position.shares * position.currentNav
-            const cost = position.shares * position.costBasis
-            const pnl = currentValue - cost
-            const pnlPercent = (pnl / cost) * 100
-            const isLocked = position.unlockDate > new Date()
+          {positions.map((position) => {
+            const currentValue = position.shares * position.unitNav
+            const isLocked = position.unlockDate ? (position.unlockDate > new Date()) : false
 
             return (
               <Card key={position.vaultId} className="p-6 gradient-card border-border/40">
@@ -85,16 +118,6 @@ export function PortfolioView() {
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">Current Value</div>
                       <div className="font-semibold font-mono">${currentValue.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">P&L</div>
-                      <div
-                        className={`font-semibold flex items-center gap-1 ${pnl >= 0 ? "text-success" : "text-destructive"}`}
-                      >
-                        {pnl >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        {pnlPercent >= 0 ? "+" : ""}
-                        {pnlPercent.toFixed(2)}%
-                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">Status</div>
@@ -118,11 +141,12 @@ export function PortfolioView() {
                         <ArrowUpRight className="h-3 w-3" />
                       </Button>
                     </Link>
-                    <Button size="sm" disabled={isLocked}>
-                      Withdraw
-                    </Button>
+                    <Button size="sm" disabled={isLocked} onClick={() => setWdOpen(position.vaultId)}>Withdraw</Button>
                   </div>
                 </div>
+                {wdOpen === position.vaultId && (
+                  <WithdrawModal open={true} onOpenChange={(o) => { if (!o) setWdOpen(null) }} vaultId={position.vaultId} />
+                )}
               </Card>
             )
           })}

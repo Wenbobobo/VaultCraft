@@ -10,10 +10,22 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
   const [side, setSide] = useState<"buy" | "sell">("buy")
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  function mapPretradeError(s: string | undefined): string {
+    if (!s) return "Pretrade check failed"
+    const t = s.toLowerCase()
+    if (t.includes("symbol") && t.includes("not allowed")) return "Symbol not in allowlist"
+    if (t.includes("leverage")) return "Leverage out of bounds"
+    if (t.includes("size") || t.includes("notional")) return "Size exceeds risk limit"
+    if (t.includes("side")) return "Invalid side"
+    return s
+  }
 
   async function send(path: string) {
     setBusy(true)
     setMsg(null)
+    setError(null)
     try {
       // pretrade check
       const pre = new URLSearchParams()
@@ -24,7 +36,7 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
       const pr = await fetch(preUrl)
       const pj = await pr.json()
       if (!pj.ok) {
-        setMsg(`Rejected: ${pj.error || "pretrade failed"}`)
+        setError(mapPretradeError(pj.error))
         return
       }
       const params = new URLSearchParams()
@@ -39,9 +51,9 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
       const url = `${BACKEND_URL}${path}?${params.toString()}`
       const r = await fetch(url, { method: "POST" })
       const body = await r.json()
-      setMsg(JSON.stringify(body))
+      setMsg(JSON.stringify(body, null, 2))
     } catch (e: any) {
-      setMsg(e?.message || String(e))
+      setError(e?.message || String(e))
     } finally {
       setBusy(false)
     }
@@ -60,9 +72,12 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
           <option value="buy">Buy</option>
           <option value="sell">Sell</option>
         </select>
-        <Button size="sm" disabled={busy} onClick={() => send("/api/v1/exec/open")}>Open</Button>
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => send("/api/v1/exec/close")}>Close</Button>
+        <Button size="sm" disabled={busy} onClick={() => send("/api/v1/exec/open")}>{busy ? "Sending..." : "Open"}</Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => send("/api/v1/exec/close")}>{busy ? "Sending..." : "Close"}</Button>
       </div>
+      {error && (
+        <div className="text-xs text-destructive mb-2">{error}</div>
+      )}
       {msg && (
         <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all">{msg}</pre>
       )}

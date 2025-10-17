@@ -1,7 +1,11 @@
+"use client"
 import { Button } from "@/components/ui/button"
 import { ArrowRight } from "lucide-react"
+import Link from "next/link"
+import { useWallet } from "@/hooks/use-wallet"
 
 export function HeroSection() {
+  const { connect } = useWallet()
   return (
     <section className="relative overflow-hidden gradient-hero py-24 md:py-32">
       <div className="container mx-auto px-4">
@@ -15,15 +19,15 @@ export function HeroSection() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Button size="lg" className="gap-2">
-              Explore Vaults
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            {process.env.NEXT_PUBLIC_ENABLE_WALLET === '1' ? (
-              <Button size="lg" variant="outline">
-                Connect Wallet
+            <Link href="/browse">
+              <Button size="lg" className="gap-2">
+                Explore Vaults
+                <ArrowRight className="h-4 w-4" />
               </Button>
-            ) : null}
+            </Link>
+            <Button size="lg" variant="outline" onClick={() => connect()}>
+              Connect Wallet
+            </Button>
           </div>
 
           <div className="mt-20 grid grid-cols-3 gap-8 max-w-2xl mx-auto">
