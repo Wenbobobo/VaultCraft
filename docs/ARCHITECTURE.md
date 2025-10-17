@@ -17,7 +17,10 @@ flowchart LR
     API[FastAPI (REST/WS)]
     IDX[Indexer: Chain Events]
     MET[Metrics Engine]
-    HYP[Hyperliquid Exec Service]
+    ING[Order Ingestor]
+    BUS[Execution Bus]
+    ALL[Fill Allocator]
+    REC[Reconciler]
   end
 
   subgraph OnChain[EVM Chain]
@@ -30,7 +33,9 @@ flowchart LR
   WAL <--> V
   API <--> IDX
   API <--> MET
-  API <--> HYP
+  API <--> ING
+  ING --> BUS --> ALL --> REC
+  API <--> REC
   V --> AD
 ```
 
@@ -38,7 +43,10 @@ flowchart LR
 - Backend：
   - Indexer：订阅链上事件，聚合 NAV 快照与参数变更
   - Metrics：计算年化/波动/Sharpe/回撤/恢复期
-  - Hyper Exec（v1）：连接 Hyperliquid API 做策略执行，产出对账数据
+  - Ingestor：接前端/经理订单，写入 orders
+  - Execution Bus：按市场/方向聚合为平台级净订单，对接外部场所（Hyper）
+  - Allocator：按各 Vault 未成交比例分摊成交，写入 allocations
+  - Reconciler：定期对账（Σallocations vs 外部账户权益），异常触发 reduce-only 与告警
 - On‑chain：Vault 份额、最短锁定、HWM 绩效费、白名单适配器；不负责跨链桥接或复杂风控（v0）
 
 ---
@@ -66,7 +74,7 @@ flowchart LR
   2) Exec Service 记录订单 → 成交回报（WS/REST）
   3) Indexer/Exec 将成交对账写入承诺日志（链上/链下）
   4) NAV 依行情 + 持仓权益计算，展示到前端（私募仅 NAV/PnL）
-- 资产托管：v0 不做真实跨链托管；资金仍在 Vault。Demo 以“合成 NAV”展示（评审可接受的路线图方案）
+- 资产托管：不迁移资金；资金仍在 Vault。Demo 以“合成 NAV”展示（评审可接受的路线图方案）
 
 ---
 
@@ -129,4 +137,3 @@ sequenceDiagram
 - v0：Public/Private、申赎/锁定、HWM 费率、最小后端指标、发现/详情/我的
 - v1：Hyper Testnet Exec、私募合成 NAV、批量窗口与队列 UI、容量可视化、告警
 - v2：多资产多链（期权/黄金/美股）、桥接/消息、DAO/时间锁与参数治理
-

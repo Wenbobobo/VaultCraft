@@ -128,6 +128,18 @@
 - 表 `whitelist_private`
   - `vault`、`account`、`added_at`
 
+- 表（新增）`orders`
+  - `id`、`vault`、`market`、`side`、`notional`、`leverage`、`reduce_only`、`tif`、`status`、`created_at`
+
+- 表（新增）`bus_orders`
+  - `id`、`market`、`side`、`agg_notional`、`status`、`created_at`
+
+- 表（新增）`fills`
+  - `id`、`bus_order`、`price`、`qty`、`fee`、`ts`
+
+- 表（新增）`allocations`
+  - `fill_id`、`vault`、`qty_alloc`、`value_alloc`、`fee_alloc`
+
 ---
 
 ## 4) 指标与计算（口径）
@@ -139,7 +151,29 @@
 
 ---
 
-## 5) 安全与治理（v0）
+## 5) Off‑chain 执行路径（v1）
+
+- Order Ingestor：接收金库订单，校验风险（允许市场/杠杆/名义上限），写入 `orders`
+- Execution Bus：按市场/方向聚合 `orders(NEW)` → 生成 `bus_orders` → 调用外部交易所（Hyper）
+- Fill Allocator：按未成交额权重分摊 `fills` 到 `allocations`
+- Reconciler：定期对账（Σallocations vs 账户权益）；漂移超阈值触发降级（reduce-only/暂停聚合）
+- NAV 算法：`NAV = 现金腿 + Σ(alloc_qty × index_price − alloc_val − fee)`；每 60s 记录 `NavSnapshot`，可生成 NAV 序列的 Merkle root 作为承诺
+
+错误码/事件（新增建议）：
+- `ErrReconcileDrift`（对账漂移过大）
+- `ErrPriceBandBreach`（成交偏离指数价带宽）
+- `ErrReduceOnly`（在 RO 模式下尝试开仓）
+
+降级策略：
+- 外部场所不可用 → 后台切换 `reduce_only`，前端提示，停止新开仓
+- 对账失败 → 暂停下一批聚合，只允许减仓；UI 黄条“保守估值”
+
+承诺：
+- 固定指数价来源（或 SDK mids），落地频率（60s），NAV 计算公式，误差桶归集
+
+---
+
+## 6) 安全与治理（v0）
 
 - 访问控制：`ADMIN`（平台）、`MANAGER`（调仓）、`GUARDIAN`（暂停）。
 - 白名单：资产/协议与适配器层；私募地址白名单；
@@ -149,7 +183,7 @@
 
 ---
 
-## 6) 目录结构与开发环境
+## 7) 目录结构与开发环境
 
 - 目录
   - `contracts/` Solidity 源码与 Foundry 测试
@@ -170,7 +204,7 @@
 
 ---
 
-## 7) TDD 计划与测试矩阵
+## 8) TDD 计划与测试矩阵
 
 - 合约单测（Foundry）
   - Vault 会计

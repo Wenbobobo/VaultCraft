@@ -4,6 +4,7 @@
 
 - 文档
   - PRD v0（docs/PRD.md）；Tech Design（docs/TECH_DESIGN.md）；架构解析（docs/ARCHITECTURE.md）；前端规范（docs/FRONTEND_SPEC.md）；配置清单（docs/CONFIG.md）；Hyper 集成（docs/HYPER_INTEGRATION.md）；Hyper 部署（docs/HYPER_DEPLOYMENT.md）
+  - v1 里程碑与验收清单：docs/PLAN_V1.md（黑客松演示范围 P0–P3；集中仓位相关移至 v2）
 - 合约（Hardhat + Foundry）
   - Vault（ERC20 shares，最短锁定、HWM 绩效费、私募白名单、适配器白名单、可暂停）
   - Hardhat 测试 + 覆盖率：Vault.sol statements 85.71%，branches 51.16%，functions 77.78%，lines 100%
@@ -27,24 +28,30 @@
   - Portfolio：改为真实链上读取 `balanceOf/ps/nextRedeemAllowed`，支持 Withdraw。
   - Manager：新增 /manager 页面，浏览器内一键部署 Vault（读取后端提供的 Hardhat Artifact），以及参数管理与白名单设置。
 
-## 需求更新与排序（来自最新演示）
+## 需求更新与排序（概览）
 
 - 已知问题（详见 docs/ISSUES.md）：
   - Hydration mismatch：已修复 `mockVault`；如有其他警告，排查随机/时间依赖并改用 CSR。
 
 ### P0（Demo 必需）
 - [x] 详情页残留与 Hydration 修复；统一 CSR/SSR 数据
-- [x] Exec 面板与事件流 UX 提示（错误映射、loading、过滤、自动滚动）
-- [x] 文档打磨：统一 env、部署步骤与排错（余额不足、私钥格式）
-- [x] 钱包连接与链切换（Header，EIP‑1193）
-- [x] Deposit 真实交互（approve + deposit）
+- [x] 钱包连接与链切换（Header/Hero）
+- [x] Deposit/Withdraw 真实交互（approve+deposit / redeem）
 - [x] 公募持仓历史（事件重建）与风险参数可视化（/status）
-- [x] Shock 模拟（写入 NAV 低值快照）
+- [x] Shock 模拟（写入 NAV 低值快照）与 Drawdown 警示条
+- [x] Browse/Manager 页面：发现/搜索/排序；一键部署与参数管理（白名单/锁期/绩效费/暂停）
+- [x] Exec 面板增强（杠杆/Reduce‑Only 输入）
 
-### P1（短期加分）
-- 私募邀请码 UI（演示）与前端 gating；实白名单通过 Hardhat 预操作
+- 私募邀请码 UI（演示）与前端 gating；实白名单通过 Hardhat/Manager 预操作
 - Listener（WS）回写落地与前端标注（"fill via listener"）
 - UI polish（进一步空态/骨架、图表/事件时间对齐）
+- Manager 扩展：Adapter 管理、Guardian/Manager 变更、部署记录写回
+
+### P1.5（Off‑chain 执行最小闭环）
+- 后端：落地 Ingestor/Execution Bus/Allocator/Reconciler 四模块（最小版）
+- 数据库：新增 orders/bus_orders/fills/allocations 四表（SQLite）
+- 对接 Hyper Testnet：dry‑run → 小额 live 受控开关，Listener 落地，分摊回写事件
+- 前端：Manager Exec 面板联动（展示订单/分摊/对账状态），金库页风险提示栏显示 RO/异常状态
  - Manager 扩展：Adapter 管理、Guardian/Manager 变更、部署记录写回。
 
 - P0（立即）
@@ -56,9 +63,34 @@
   - Hardhat：添加基于 Exec 的 mock 测试（不依赖真实网络）
 - P2（后续）
   - 容量/拥挤函数、批量窗口、告警通道、Manager Console（参数调整、白名单、限权）
-  - 跨链只读会计 → 桥接/消息 Orchestrator（v2）
+ - 跨链只读会计 → 桥接/消息 Orchestrator（v2）
   - 私募邀请码签名校验与服务端管理
   - 在线创建 Vault 表单化（替代 Hardhat 任务）
+  - Webhook 报警（nav_drawdown/px_spike/state_change）与去抖节流
+
+---
+
+## v1（P0–P3）与 v2（简版）
+
+- v1 P0：链上闭环（申赎/锁定/HWM/白名单/暂停）+ 前后端展示闭环（已完成）
+- v1 P1：Listener e2e 与 UI 打磨（进行中）
+- v1 P2：Hyper SDK 最小真实下单（BTC/ETH），dry‑run→小额 live，事件/NAV 联动
+- v1 P3：脚本打磨与验收（骨架/空态、错误与降级提示、端到端走查）
+- v2：集中仓位与对账（Ingestor/Bus/Allocator/Reconciler 与四表），演示不启用
+
+详情与验收条款：见 docs/PLAN_V1.md
+
+---
+
+## 交接要点（更新）
+
+- 统一根 .env；钱包链 998；默认 dry‑run，启用真实下单需 ENABLE_LIVE_EXEC=1 且小额测试
+- 资金始终在 Vault；后端仅代下单/估值；Adapter 与执行市场白名单与限权生效
+- 常见故障：
+  - 无效地址 → 前端禁用按钮（避免 ENS 查找）；
+  - 私募未白名单 → Manager 白名单后再 deposit；
+  - Hyper SDK 不可用或 RPC 波动 → 价格回退 REST，Exec 走 dry‑run；UI 黄条提示保守估值/RO；
+- 文档：方案（PRD/TECH/ARCH），部署（HYPER_DEPLOYMENT），计划（PLAN_V1）；演示脚本见 DEMO_PLAN
 
 ## 环境与配置
 

@@ -599,3 +599,175 @@ GPT:
     
 
 能跑、能验、能怼问答，够了。再想造交易所，等你不缺头发的时候再说。
+
+GPT：
+行，这套“v0 先链上 execute，v1 再集中镜像”是对的，而且你写的卖点顺序刚好踩在评委的嗨点上。接下来我不复读你的稿子，直接给补丁：把还能戳穿的漏洞补上、把必须落地的接口、表结构、事件、验收项一次性钉死。GUI 为主，CLI 只留内部。
+
+---
+
+# 一、必须先说清的边界（免得被追问崩盘）
+
+* **v0 只走链上闭环**：用户的钱只进你们的 `Vault(ERC-4626)`，经理只能调 `vault.execute(router, adapter, data)`，适配器白名单约束一切。评委能从链上看到 Deposit/Withdraw/Execute/PerfFee/NavSnapshot 全链路。
+* **v1 是“集中仓位镜像”**：后端对接 Hyper API 聚合下单、分摊、对账，**但不迁移 Vault 资金**。UI 明确标注“执行在测试网服务账户；资金在合约”。
+* **两条路并存**：金库级开关 `execution_mode = onchain|mirrored`，公募默认 onchain，私募可选 mirrored。
+
+---
+
+# 二、v0 规范（合约与最小适配器）
+
+## 1) 合约接口与事件（建议）
+
+```solidity
+interface IVault4626 is IERC4626 {
+  // 管理参数
+  function setAdapterWhitelist(address adapter, bool allowed) external;
+  function setPause(bool paused) external;
+  function setReduceOnly(bool ro) external; // v0 就能上
+
+  // 执行
+  function execute(address router, address adapter, bytes calldata callData) external;
+
+  // 绩效费（高水位线）
+  event PerformanceFeeAccrued(uint256 sharesMinted, uint256 newHWM);
+
+  // 会计/快照（评委要看的）
+  event NavSnapshot(uint256 assets, uint256 liabilities, uint256 totalShares, uint256 ps, uint64 ts);
+  event Execute(address indexed adapter, bytes data, int256 deltaAssets, uint64 ts);
+}
+```
+
+**要点**
+
+* 绩效费用“增发份额给经理”实现，PS 不跳。
+* `reduceOnly` 在 `execute` 入口与适配器内都校验，RO 期间禁止净开仓。
+* `NavSnapshot` 周期性从 Indexer回填调用一个只读 `emitSnapshot()` 或直接让前端订链上事件（任选其一，v0 选链上事件最好看）。
+
+## 2) Router/Adapter（薄到能跑）
+
+* **AdapterSpotV1**：只支持单条现货 swap（UniswapV3/官方路由二选一），入参固定：`tokenIn, tokenOut, amountIn, minOut, deadline`。
+* **AdapterPerpsMock**：用存证事件模拟持仓变化与 PnL，不跟真实撮合；评委看到“合约受控 + RO”就够了。真 Perps 适配器留到 v1.5。
+* **PolicyGuard**：v0 做三条硬规则够用：白名单资产/适配器、价格带、累计滑点窗口限额，配全局 Pause/RO。
+
+## 3) 最小验收脚本
+
+* 存入→执行 3 笔→绩效费→赎回，链上事件对得上；
+* Pause 能挡住 execute；RO 能只许减仓；
+* `PS` 在申赎中保持一致，会计不变量肉眼可见。
+
+---
+
+# 三、GUI 规范（v0）
+
+不造交易所，造“可验证操作台”。
+
+* **Manager Console**
+
+  * 订单票据：市场、数量（或金额）、方向、可选 `reduceOnly`、`ttl`；
+  * 只嵌当前市场一张 TradingView；
+  * 风险卡：净敞口、保证金利用度、近 24h PnL、MDD；
+  * 事件流：Deposit/Withdraw/Execute/PerfFee/NavSnapshot。
+* **金库页**
+
+  * 公募：持仓表、最近交易；
+  * 私募：投前摘要，投后仅 NAV/PnL/KPI；
+  * 顶部黄条：Pause/RO 状态、容量拥挤度条（见下）。
+
+---
+
+# 四、容量与限额（你要“公募限制、私募不限制”的可用版本）
+
+* 合约加一个 `maxTotalAssets`（可更新事件），**公募金库启用、私募默认关闭**。
+* 后端每 N 分钟计算动态上限 `Cap_t` 推到链上（函数你定调性就行，别把微积分写链上）：
+
+  * 示例：`Cap_t = min(Cmax, C0 * exp(a * 近30d年化⁺) * exp(b * 存续天数^0.5) * (1 - c * 近90dMDD⁺))`
+* 前端显示拥挤度条，满了禁用 `deposit`。
+
+---
+
+# 五、v1 规范（集中镜像：Ingestor/Bus/Allocator/Reconciler）
+
+## 1) 四模块与四张表
+
+* `orders(id, vault, venue, market, side, notional, leverage, tif, status, created_at)`
+* `bus_orders(id, venue, market, side, agg_notional, status)`
+* `fills(id, bus_order, price, qty, fee, ts)`
+* `allocations(fill_id, vault, qty_alloc, val_alloc, fee_alloc)`
+
+**Bus** 聚合同一市场同向净额；**Allocator** 按“各 vault 未成交额占比”分摊 fill；**Reconciler** 校验 `Σallocations ≈ 账户权益`，超阈值自动全体 RO 并黄条“保守估值”。
+
+## 2) NAV 承诺与重放
+
+* 每 60 秒产 `nav_snapshots`，做 Merkle root（可不上链）；
+* **全量重建脚本**：按时间回放 allocations，维护 `qty/avg_px/realized/unrealized`，形成 `NAV_t` 与快照对账；偏差>阈值记 `ErrReconcileDrift` 并 RO。
+
+## 3) 降级与状态
+
+* 任何 venue 掉线/风控价格带越界/对账偏差过大 → 停新单、只许减仓、黄条提示。
+* 订单都带 `client_id = keccak(vault, nonce)`，可追溯。
+
+---
+
+# 六、报警 Webhook（电话真打出来）
+
+* **触发器**
+
+  * `px_spike`: 主流币 1m 变动 ≥ 3%
+  * `nav_drawdown`: 5m NAV 回撤 ≥ X%
+  * `state_change`: Pause/RO/Cap 触顶
+* **规则表**
+
+  ```
+  alerts(id, vault, type, symbol, window_s, threshold, cooldown_s,
+         channels['webhook','voice'], webhook_url, phone_list, enabled)
+  ```
+* **节流**：相同 (vault,type) 在 cooldown 内最多一次；多条合并成一通。
+* **演示开关**：管理页提供 `inject_px` 与 `inject_nav` 两个 admin 接口模拟波动，立刻触发电话。
+* **失败重试**：指数退避 3 次，仍失败写事件“DELIVERY_FAILED”。
+
+---
+
+# 七、公共/私募的差异表（MVP 可交付）
+
+| 维度   | 公募                           | 私募                 |
+| ---- | ---------------------------- | ------------------ |
+| 执行模式 | 默认 onchain adapter           | 可选 mirrored        |
+| 披露   | 持仓/交易全公开                     | 投前摘要、投后仅 NAV/PnL   |
+| 容量   | 启用 `maxTotalAssets` + 动态 Cap | 默认无限（仍保留 RO/Pause） |
+| 费用   | 管理费可选、HWM 绩效费                | 同上                 |
+| 锁期   | T+N 曲线                       | 由经理配置              |
+
+---
+
+# 八、风险清单（现在就堵）
+
+* **v0 适配器作恶面**：把所有“去哪、能做啥”写进适配器白名单和 PolicyGuard，默认只开现货 swap。
+* **RO 漏洞**：在 Router 和 Adapter 双层校验，不靠前端。
+* **mirrored 观感混淆**：金库页标题下放醒目徽章“执行=Mirrored；资金=Vault 合约地址”，能点开看到合约地址与 EVM 探索器链接。
+* **告警风暴**：默认阈值保守、cooldown 必开；UI 显示“上次告警时间/原因”。
+
+---
+
+# 九、交付清单与验收（别糊弄自己）
+
+**v0 必须看到的**
+
+* 合约：Vault/Router/AdapterSpotV1/PolicyGuard 已部署；Pause/RO 有效；
+* 事件：Deposit/Withdraw/Execute/PerformanceFee/NavSnapshot 全能抓到；
+* GUI：Manager Console 下单成交、事件流刷新、公募持仓可见、私募仅 NAV。
+
+**v1.5 必须看到的**
+
+* 后端：四表+四模块跑起来，能 dry-run→小额 live；
+* 对账：Reconciler 能出 “OK/Drift(xx bps)” 状态；
+* 降级：触发 drift 模拟，前端全体变 RO 并黄条；
+* 告警：mock 注入成功触发电话。
+
+---
+
+# 十、你现在该做的三件具体事
+
+1. **把 `reduceOnly` 和 `maxTotalAssets` 写进 v0 合约**，把适配器白名单做成映射，默认只开现货。
+2. **补后端两个接口**：`/api/v1/nav_series/:vault` 与 `/api/v1/events/:vault` 固定返回结构（PS、assets、liab、ts），前端一次接完。
+3. **文案与标识**：在金库详情页加“执行模式徽章 + 资金托管提示 + 合约地址链接”，评委问三句不会把你问哭。
+
+结论很简单：先把**链上 execute 闭环**钉死，这是可信的“安全托管边界 + 可验证执行”的硬凭证；再在 v1.5 上好看地把**集中镜像**做全套分摊与对账。这样你既能在台上稳住，也留足成长空间。别贪快去糊一个“API 下单 + 口头 NAV”，那只会让评委怀疑你在讲故事。
