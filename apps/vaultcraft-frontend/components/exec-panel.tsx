@@ -19,6 +19,7 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
     const t = s.toLowerCase()
     if (t.includes("symbol") && t.includes("not allowed")) return "Symbol not in allowlist"
     if (t.includes("leverage")) return "Leverage out of bounds"
+    if (t.includes("below minimum")) return "Notional below minimum ($10)"
     if (t.includes("size") || t.includes("notional")) return "Size exceeds risk limit"
     if (t.includes("side")) return "Invalid side"
     return s

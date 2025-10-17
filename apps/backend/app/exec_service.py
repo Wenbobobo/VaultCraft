@@ -6,9 +6,28 @@ from typing import Any, Dict
 from .hyper_exec import Order, HyperExecClient
 from .settings import settings, Settings
 from .events import store as event_store
-from .positions import apply_fill, apply_close
+from .positions import apply_fill, apply_close, get_profile
 from .navcalc import snapshot_now
 from .price_provider import PriceRouter
+import json
+
+
+def _payload_has_error(payload: dict | list | str | None) -> bool:
+    try:
+        if payload is None:
+            return False
+        if isinstance(payload, str):
+            return "error" in payload.lower()
+        if isinstance(payload, dict):
+            if any(k.lower() == "error" for k in payload.keys()):
+                return True
+            return any(_payload_has_error(v) for v in payload.values())
+        if isinstance(payload, list):
+            return any(_payload_has_error(v) for v in payload)
+        # Fallback: string form
+        return "error" in str(payload).lower()
+    except Exception:
+        return False
 
 
 class ExecDriver:
@@ -29,6 +48,11 @@ class HyperSDKDriver(ExecDriver):
             raise RuntimeError("hyperliquid SDK not available") from e
         env = Settings()
         pk = private_key or env.HYPER_TRADER_PRIVATE_KEY or env.PRIVATE_KEY
+        if pk:
+            t = str(pk).strip().strip('"').strip("'")
+            if not t.startswith("0x") and len(t) == 64:
+                t = "0x" + t
+            pk = t
         if not pk:
             raise RuntimeError("missing HYPER_TRADER_PRIVATE_KEY for live exec")
         self._Exchange = Exchange
@@ -46,7 +70,8 @@ class HyperSDKDriver(ExecDriver):
         return {"ack": res}
 
     def close(self, symbol: str, size: float | None = None) -> Dict[str, Any]:
-        res = self._exch.market_close(name=symbol, sz=(float(size) if size is not None else None))
+        # Hyper SDK expects 'coin' for market_close
+        res = self._exch.market_close(coin=symbol, sz=(float(size) if size is not None else None))
         return {"ack": res}
 
 
@@ -80,6 +105,8 @@ class ExecService:
         notional = abs(order.size) * (price or 0.0)
         if price > 0.0 and notional > env.EXEC_MAX_NOTIONAL_USD:
             raise ValueError("notional exceeds limit")
+        if price > 0.0 and notional < env.EXEC_MIN_NOTIONAL_USD:
+            raise ValueError("notional below minimum")
 
     def open(self, vault: str, order: Order) -> Dict[str, Any]:
         # validate first
@@ -98,12 +125,15 @@ class ExecService:
             return {"ok": True, "dry_run": True, "payload": payload}
         try:
             ack = self._driver().open(order)
-            event_store.add(vault, {"type": "exec_open", "status": "ack", "payload": ack})
-            if settings.APPLY_LIVE_TO_POSITIONS:
+            # Basic success detection: treat presence of 'error' in ack tree as failure
+            payload = ack.get("ack") if isinstance(ack, dict) else ack
+            ok = not _payload_has_error(payload)
+            event_store.add(vault, {"type": "exec_open", "status": ("ack" if ok else "error"), "payload": ack})
+            if ok and settings.APPLY_LIVE_TO_POSITIONS:
                 apply_fill(vault, order.symbol, order.size, order.side)
                 unit = snapshot_now(vault)
                 event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": order.symbol, "side": order.side, "size": order.size, "unitNav": unit})
-            return {"ok": True, "payload": ack}
+            return {"ok": ok, "payload": ack}
         except Exception as e:
             event_store.add(vault, {"type": "exec_open", "status": "error", "error": str(e)})
             return {"ok": False, "error": str(e)}
@@ -119,12 +149,14 @@ class ExecService:
             return {"ok": True, "dry_run": True, "payload": payload}
         try:
             ack = self._driver().close(symbol=symbol, size=size)
-            event_store.add(vault, {"type": "exec_close", "status": "ack", "payload": ack})
-            if settings.APPLY_LIVE_TO_POSITIONS:
+            payload_ack = ack.get("ack") if isinstance(ack, dict) else ack
+            ok = not _payload_has_error(payload_ack)
+            event_store.add(vault, {"type": "exec_close", "status": ("ack" if ok else "error"), "payload": ack})
+            if ok and settings.APPLY_LIVE_TO_POSITIONS:
                 apply_close(vault, symbol, size)
                 unit = snapshot_now(vault)
                 event_store.add(vault, {"type": "fill", "status": "applied", "symbol": symbol, "side": "close", "size": size, "unitNav": unit})
-            return {"ok": True, "payload": ack}
+            return {"ok": ok, "payload": ack}
         except Exception as e:
             event_store.add(vault, {"type": "exec_close", "status": "error", "error": str(e)})
             return {"ok": False, "error": str(e)}

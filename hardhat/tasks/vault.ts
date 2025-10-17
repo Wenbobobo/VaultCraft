@@ -53,6 +53,16 @@ task("vault:set-perf-fee", "Set performance fee (bps)")
     console.log(`Performance fee set: ${args.bps} bps`);
   });
 
+task("vault:snapshot", "Emit a NavSnapshot event on the vault")
+  .addParam("vault", "Vault address")
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
+    const v = await ethers.getContractAt("Vault", args.vault);
+    const tx = await v.snapshot();
+    await tx.wait();
+    console.log(`Snapshot emitted for ${args.vault}`);
+  });
+
 task("vault:deposit", "Approve and deposit into the vault")
   .addParam("vault", "Vault address")
   .addParam("asset", "Asset (ERC20) address")

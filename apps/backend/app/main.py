@@ -39,6 +39,7 @@ def api_status():
         "exec_min_leverage": getattr(settings, "EXEC_MIN_LEVERAGE", None),
         "exec_max_leverage": getattr(settings, "EXEC_MAX_LEVERAGE", None),
         "exec_max_notional_usd": getattr(settings, "EXEC_MAX_NOTIONAL_USD", None),
+        "exec_min_notional_usd": getattr(settings, "EXEC_MIN_NOTIONAL_USD", None),
     }
     try:
         http = HyperHTTP()
