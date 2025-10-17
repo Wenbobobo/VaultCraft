@@ -35,18 +35,22 @@
 
 ---
 
-## 3. Web（apps/web）
+## 3. Web（apps/vaultcraft-frontend）
 
 - NEXT_PUBLIC_RPC_URL：前端只读 RPC，用于读取 ps/totalAssets 等链上数据
-- NEXT_PUBLIC_BACKEND_URL（可选）：后端 API 基地址（指标/事件）
+- NEXT_PUBLIC_BACKEND_URL：后端 API 基地址（指标/事件）
+- NEXT_PUBLIC_ENABLE_DEMO_TRADING：是否展示受控下单面板（默认 0）
+- NEXT_PUBLIC_ENABLE_WALLET：是否显示“Connect Wallet”按钮（默认 0，未接入钱包时请隐藏）
 
 ---
 
 ## 4. Backend（apps/backend）
 
-- HYPER_API_URL / HYPER_WS_URL：Hyper API 与 WS 地址（v1）
-- HYPER_API_KEY / SECRET：服务账号（v1）
-- DATABASE_URL：SQLite/Postgres 连接（缺省 SQLite 文件）
+- HYPER_API_URL / HYPER_RPC_URL / HYPER_WS_URL：Hyper API / RPC / WS 地址
+- ENABLE_HYPER_SDK：启用官方 Python SDK 获取行情（默认 0）
+- ENABLE_LIVE_EXEC：启用实单执行（默认 0）
+- EXEC_*：风险与额度参数（allowed symbols/lev/notional）
+- POSITIONS_FILE / EVENT_LOG_FILE：本地持仓/事件持久化（演示）
 
 ---
 
@@ -54,4 +58,3 @@
 
 - 所有敏感密钥仅存放在本地 .env 或安全密管；不要提交到仓库
 - 部署成功后将地址同步到 deployments/*.json 并告知前端/后端团队
-

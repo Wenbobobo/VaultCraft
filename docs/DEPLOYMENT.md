@@ -122,13 +122,19 @@ uv run uvicorn app.main:app --reload --port 8000
 
 ### 4.2 前端（apps/vaultcraft-frontend）
 
+前端不再使用单独的 `.env.local`，统一读取仓库根目录 `.env` 中的 `NEXT_PUBLIC_*` 变量。
+
 ```
 cd apps/vaultcraft-frontend
-copy .env.example .env.local
-# 编辑 .env.local 中 NEXT_PUBLIC_BACKEND_URL 指向后端
 pnpm i
 pnpm dev
 ```
+
+必要参数（写在仓库根 `.env`）：
+- `NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000`
+- `NEXT_PUBLIC_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm`
+- `NEXT_PUBLIC_ENABLE_DEMO_TRADING=0|1`（演示下单面板开关）
+- `NEXT_PUBLIC_ENABLE_WALLET=0|1`（显示“Connect Wallet”按钮；默认 0 隐藏）
 
 页面：
 - `/` Discover：展示金库列表（默认通过后端 API 获取）
