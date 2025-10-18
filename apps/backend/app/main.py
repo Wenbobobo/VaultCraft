@@ -18,6 +18,20 @@ from .daemon import SnapshotDaemon
 from .user_listener import UserEventsListener, last_ws_event
 from .hyper_client import HyperHTTP
 
+
+def _repo_root() -> Path:
+    root = Path(__file__).resolve().parent
+    for _ in range(10):
+        if (root / ".git").exists() or (root / "README.md").exists():
+            return root
+        if root.parent == root:
+            break
+        root = root.parent
+    return root
+
+
+REPO_ROOT = _repo_root()
+
 app = FastAPI(title="VaultCraft v0 API")
 
 
@@ -221,7 +235,7 @@ def api_artifact_vault():
 
     This avoids bundling artifacts in the FE and keeps a single source of truth.
     """
-    artifact = Path("hardhat") / "artifacts" / "contracts" / "Vault.sol" / "Vault.json"
+    artifact = REPO_ROOT / "hardhat" / "artifacts" / "contracts" / "Vault.sol" / "Vault.json"
     if not artifact.exists():
         return {"error": "artifact not found", "path": str(artifact)}
     try:
@@ -234,7 +248,7 @@ def api_artifact_vault():
 @app.get("/api/v1/artifacts/mockerc20")
 def api_artifact_mockerc20():
     """Serve MockERC20 ABI and bytecode from Hardhat artifacts for FE dev helpers."""
-    artifact = Path("hardhat") / "artifacts" / "contracts" / "MockERC20.sol" / "MockERC20.json"
+    artifact = REPO_ROOT / "hardhat" / "artifacts" / "contracts" / "MockERC20.sol" / "MockERC20.json"
     if not artifact.exists():
         return {"error": "artifact not found", "path": str(artifact)}
     try:
@@ -250,18 +264,42 @@ def api_register_deployment(vault: str, asset: str | None = None):
 
     This is a convenience for demo. In production this should be guarded.
     """
-    f = Path("deployments") / "hyper-testnet.json"
+    f = REPO_ROOT / "deployments" / "hyper-testnet.json"
     try:
         meta = json.loads(f.read_text()) if f.exists() else {}
     except Exception:
         meta = {}
     meta.setdefault("network", "hyperTestnet")
+    deployments = meta.get("deployments")
+    if not isinstance(deployments, list):
+        deployments = []
+        legacy = {}
+        if isinstance(meta.get("vault"), str):
+            legacy["vault"] = meta.get("vault")
+        if meta.get("asset"):
+            legacy["asset"] = meta.get("asset")
+        if legacy.get("vault"):
+            deployments.append(legacy)
+    updated = False
+    for item in deployments:
+        if isinstance(item, dict) and item.get("vault") == vault:
+            if asset:
+                item["asset"] = asset
+            updated = True
+            break
+    if not updated:
+        entry = {"vault": vault, "type": "public"}
+        if asset:
+            entry["asset"] = asset
+        deployments.append(entry)
+    meta["deployments"] = deployments
+    # retain legacy keys for backward compatibility
+    meta["vault"] = vault
     if asset:
         meta["asset"] = asset
-    meta["vault"] = vault
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(meta, indent=2, ensure_ascii=False))
-    return {"ok": True, "path": str(f)}
+    return {"ok": True, "path": str(f), "deployments": deployments}
 
 
 # --- Exec Service (dry-run env-controlled) ---
@@ -292,9 +330,15 @@ def _vault_registry() -> List[Dict[str, object]]:
     out: Dict[str, Dict[str, object]] = {}
     # 1) positions.json keys → default private vaults
     try:
-        pos_path = os.getenv("POSITIONS_FILE") or str(Path("deployments") / "positions.json")
-        if Path(pos_path).exists():
-            data = json.loads(Path(pos_path).read_text() or "{}")
+        pos_path = os.getenv("POSITIONS_FILE")
+        if pos_path:
+            path = Path(pos_path)
+            if not path.is_absolute():
+                path = REPO_ROOT / path
+        else:
+            path = REPO_ROOT / "deployments" / "positions.json"
+        if path.exists():
+            data = json.loads(path.read_text() or "{}")
             if isinstance(data, dict):
                 for vid in data.keys():
                     if isinstance(vid, str):
@@ -307,12 +351,23 @@ def _vault_registry() -> List[Dict[str, object]]:
         pass
     # 2) deployments/hyper-testnet.json vault → prefer public entry if present
     try:
-        d = Path("deployments") / "hyper-testnet.json"
+        d = REPO_ROOT / "deployments" / "hyper-testnet.json"
         if d.exists():
             meta = json.loads(d.read_text() or "{}")
-            vid = meta.get("vault")
-            if isinstance(vid, str) and vid:
-                out[vid] = {"id": vid, "name": "VaultCraft (Hyper Testnet)", "type": "public"}
+            deployments = []
+            if isinstance(meta.get("deployments"), list):
+                deployments = meta["deployments"]
+            elif meta.get("vault"):
+                deployments = [{"vault": meta.get("vault"), "asset": meta.get("asset")}]
+            for entry in deployments:
+                vid = entry.get("vault")
+                if isinstance(vid, str) and vid:
+                    out[vid] = {
+                        "id": vid,
+                        "name": entry.get("name") or "VaultCraft (Hyper Testnet)",
+                        "type": entry.get("type") or "public",
+                        "asset": entry.get("asset"),
+                    }
     except Exception:
         pass
     # fallback demo if empty
@@ -354,13 +409,20 @@ def api_vault_detail(vault_id: str):
     # Attempt to enrich with deployment meta (asset address, if known)
     asset_addr = None
     try:
-        d = Path("deployments") / "hyper-testnet.json"
+        d = REPO_ROOT / "deployments" / "hyper-testnet.json"
         if d.exists():
             meta = json.loads(d.read_text() or "{}")
-            if isinstance(meta.get("vault"), str) and meta.get("vault") == vault_id:
-                a = meta.get("asset")
-                if isinstance(a, str) and a:
-                    asset_addr = a
+            deployments = []
+            if isinstance(meta.get("deployments"), list):
+                deployments = meta["deployments"]
+            elif meta.get("vault"):
+                deployments = [{"vault": meta.get("vault"), "asset": meta.get("asset")}]
+            for entry in deployments:
+                if isinstance(entry, dict) and entry.get("vault") == vault_id:
+                    a = entry.get("asset")
+                    if isinstance(a, str) and a:
+                        asset_addr = a
+                        break
     except Exception:
         pass
     return {

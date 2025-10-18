@@ -31,7 +31,7 @@ export function useOnchainVault(address: string) {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      if (!provider) return
+      if (!provider || !ethers.isAddress(address)) return
       try {
         const vault = new ethers.Contract(address, VAULT_ABI, provider)
         const [ps, assets, supply, fee, lock, priv] = await Promise.all([
@@ -53,8 +53,9 @@ export function useOnchainVault(address: string) {
           isPrivate: Boolean(priv),
         })
       } catch (e) {
-        // silent fail; UI can rely on backend
-        console.error(e)
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[useOnchainVault]", e)
+        }
       }
     }
     load()
@@ -65,4 +66,3 @@ export function useOnchainVault(address: string) {
 
   return data
 }
-

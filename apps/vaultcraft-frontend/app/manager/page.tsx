@@ -31,7 +31,7 @@ const MGMT_ABI = [
 ]
 
 export default function ManagerPage() {
-  const { connect, isHyper, address } = useWallet()
+  const { connect, isHyper, address, ensureHyperChain } = useWallet()
   const [asset, setAsset] = useState(DEFAULT_ASSET_ADDRESS)
   const [name, setName] = useState("VaultCraft")
   const [symbol, setSymbol] = useState("VSHARE")
@@ -104,15 +104,36 @@ export default function ManagerPage() {
     }
   }, [asset, address])
 
+  useEffect(() => {
+    if (DEFAULT_ASSET_ADDRESS || asset) return
+    let cancelled = false
+    fetch(`${BACKEND_URL}/api/v1/vaults`)
+      .then((r) => r.json())
+      .then((res) => {
+        if (cancelled) return
+        const vaults = Array.isArray(res?.vaults) ? res.vaults : []
+        const withAsset = vaults.find((v: any) => v?.asset && typeof v.asset === "string")
+        if (withAsset?.asset) {
+          setAsset(withAsset.asset)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [asset])
+
   async function deploy() {
     setDeployErr(null); setDeployMsg(null)
     try {
       await connect()
+      await ensureHyperChain?.()
       if (!isHyper) throw new Error("Please switch to Hyper Testnet (chain 998)")
+      if (!ethers.isAddress(asset)) throw new Error("Please enter a valid asset ERC20 address (e.g. Hyper USDC)")
       // fetch artifact from backend
       const r = await fetch(`${BACKEND_URL}/api/v1/artifacts/vault`)
       const art = await r.json()
-      if (!art?.bytecode || !art?.abi) throw new Error("Artifact not available")
+      if (!art?.bytecode || !art?.abi) throw new Error(art?.error || "Artifact not available")
       const eth = (window as any).ethereum
       const provider = new ethers.BrowserProvider(eth)
       const signer = await provider.getSigner()
@@ -177,7 +198,7 @@ export default function ManagerPage() {
       await connect()
       const artRes = await fetch(`${BACKEND_URL}/api/v1/artifacts/mockerc20`)
       const art = await artRes.json()
-      if (!art?.bytecode || !art?.abi) throw new Error("MockERC20 artifact not available")
+      if (!art?.bytecode || !art?.abi) throw new Error(art?.error || "MockERC20 artifact not available")
       const eth = (window as any).ethereum
       const provider = new ethers.BrowserProvider(eth)
       const signer = await provider.getSigner()
@@ -216,7 +237,9 @@ export default function ManagerPage() {
                   ) : assetInfo ? (
                     <div className="text-xs text-muted-foreground">{assetInfo.symbol ? `${assetInfo.symbol} · ` : ""}{assetInfo.decimals ?? "?"} decimals</div>
                   ) : (
-                    <div className="text-xs text-destructive">Unable to read token metadata</div>
+                    <div className="text-xs text-muted-foreground">
+                      Unable to read token metadata. Set <code className="font-mono">NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS</code> in <code>.env</code> (e.g. Hyper Testnet USDC) or use the dev helper below.
+                    </div>
                   )}
                 </div>
                 <div className="space-y-1 text-sm">

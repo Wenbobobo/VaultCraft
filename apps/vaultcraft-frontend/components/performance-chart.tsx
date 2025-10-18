@@ -3,13 +3,10 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 
 type Point = { date: string; nav: number };
 
-// Mock performance data
+// Mock performance data (deterministic to avoid hydration mismatches)
 const mockData: Point[] = Array.from({ length: 90 }, (_, i) => ({
-  date: new Date(Date.now() - (89 - i) * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  }),
-  nav: 1.0 + (Math.random() * 0.3 + i * 0.003) * (1 + Math.sin(i / 10) * 0.1),
+  date: `Day ${i + 1}`,
+  nav: Number((1.0 + i * 0.003 + Math.sin(i / 8) * 0.02).toFixed(4)),
 }))
 
 export function PerformanceChart({ data }: { data?: Point[] }) {

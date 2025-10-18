@@ -61,7 +61,6 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [vault, setVault] = useState<UIState>(fallbackVault)
   const [asset, setAsset] = useState<string | null>(null)
-  const [navData, setNavData] = useState<number[]>([])
   const chain = useOnchainVault(vaultId)
   const nav = useNavSeries(vaultId, 5000, 180)
   const [risk, setRisk] = useState<{ minLev?: number; maxLev?: number; maxNotional?: number; symbols?: string } | null>(null)
@@ -118,13 +117,12 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
         nav: p.nav,
       }))
     }
-    // fallback to initial data
-    const now = Date.now()
-    return navData.map((v, i, arr) => ({
-      date: new Date(now - (arr.length - 1 - i) * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      nav: v,
+    // fallback deterministic curve
+    return Array.from({ length: 90 }, (_, i) => ({
+      date: `Day ${i + 1}`,
+      nav: Number((1.0 + i * 0.003 + Math.sin(i / 8) * 0.02).toFixed(4)),
     }))
-  }, [nav.series, navData])
+  }, [nav.series])
 
   const drawdown = useMemo(() => {
     let max = 0
@@ -189,6 +187,11 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
               <ArrowUpRight className="h-4 w-4" />
             </Button>
           </div>
+          {!validVault && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Demo vault addresses use placeholders. Deploy or register a real vault (see Manager console) to enable deposit / withdraw actions.
+            </p>
+          )}
         </div>
       </section>
 
