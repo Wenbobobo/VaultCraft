@@ -98,3 +98,30 @@ def test_close_fallback_reduce_only(monkeypatch, tmp_path):
     prof = get_profile("0xv")
     # position should be reduced by ~0.5
     assert abs(prof["positions"].get("ETH", 0.0)) < 1e-9
+
+
+def test_exec_retry_attempts(monkeypatch, tmp_path):
+    monkeypatch.setenv("POSITIONS_FILE", str(tmp_path / "positions.json"))
+    monkeypatch.setenv("ENABLE_LIVE_EXEC", "1")
+    monkeypatch.setenv("EXEC_RETRY_ATTEMPTS", "2")
+    monkeypatch.setenv("EXEC_RETRY_BACKOFF_SEC", "0")
+    from app.hyper_exec import Order
+
+    class RetryDriver:
+        def __init__(self):
+            self.calls = 0
+
+        def open(self, order: Order):
+            self.calls += 1
+            if self.calls == 1:
+                return {"ack": {"status": "ok", "response": {"type": "order", "data": {"statuses": [{"error": "Price too far from oracle"}]}}}}
+            return {"ack": {"status": "ok", "response": {"type": "order", "data": {"statuses": [{"filled": {"totalSz": str(order.size)}}]}}}}
+
+        def close(self, symbol: str, size: float | None = None):
+            raise NotImplementedError
+
+    drv = RetryDriver()
+    svc = ExecService(driver=drv)
+    out = svc.open("0xrv", Order(symbol="ETH", size=0.1, side="buy"))
+    assert out["ok"] is True
+    assert out.get("attempts") == 2

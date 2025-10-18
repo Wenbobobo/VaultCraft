@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     EXEC_MAX_LEVERAGE: float = 50.0
     EXEC_MAX_NOTIONAL_USD: float = 1e9
     EXEC_MIN_NOTIONAL_USD: float = 10.0
+    EXEC_MARKET_SLIPPAGE_BPS: float = 10.0
+    EXEC_RO_SLIPPAGE_BPS: float | None = None
+    EXEC_RETRY_ATTEMPTS: int = 0
+    EXEC_RETRY_BACKOFF_SEC: float = 1.0
     # Live trading credentials (if SDK uses private key)
     HYPER_TRADER_PRIVATE_KEY: str | None = None
     PRIVATE_KEY: str | None = None  # alias for convenience

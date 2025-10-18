@@ -15,7 +15,7 @@ from .snapshots import store as snapshot_store
 from .events import store as event_store
 from .exec_service import ExecService
 from .daemon import SnapshotDaemon
-from .user_listener import UserEventsListener
+from .user_listener import UserEventsListener, last_ws_event
 from .hyper_client import HyperHTTP
 
 app = FastAPI(title="VaultCraft v0 API")
@@ -62,9 +62,16 @@ def api_status():
         snapshot_state = "idle"
         if _snapshot_daemon and _snapshot_daemon.is_running():
             snapshot_state = "running"
+    vault_key = flags["address"] or "_global"
+    last_ws = None
+    try:
+        last_ws = last_ws_event(vault_key)
+    except Exception:
+        last_ws = None
     state = {
         "listener": listener_state,
         "snapshot": snapshot_state,
+        "listenerLastTs": last_ws,
     }
     return {"ok": True, "flags": flags, "network": rpc, "state": state}
 

@@ -21,7 +21,7 @@ type Net = { rpc?: string | null; chainId?: number | null; block?: number | null
 export function StatusBar() {
   const [flags, setFlags] = useState<Flags | null>(null)
   const [net, setNet] = useState<Net | null>(null)
-  const [runtime, setRuntime] = useState<{ listener?: string; snapshot?: string } | null>(null)
+  const [runtime, setRuntime] = useState<{ listener?: string; snapshot?: string; listenerLastTs?: number | null } | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -44,11 +44,25 @@ export function StatusBar() {
   if (!flags) return null
   const mode = flags.enable_live_exec ? "Live" : "Dry-run"
   const modeColor = flags.enable_live_exec ? "text-green-400" : "text-yellow-400"
+  const lastTs = runtime?.listenerLastTs
+  const ageSec = lastTs ? Math.max(0, Math.round(Date.now() / 1000 - lastTs)) : null
+  const listenerState = (() => {
+    if (!flags.enable_user_ws) return { text: "off", className: "text-muted-foreground" }
+    const base = runtime?.listener ?? "idle"
+    if (!lastTs) return { text: base, className: base === "running" ? "text-green-400" : "text-yellow-400" }
+    if (ageSec != null && ageSec > 300) {
+      return { text: `${base} · no fill ${Math.floor(ageSec / 60)}m`, className: "text-yellow-400" }
+    }
+    if (ageSec != null && ageSec > 60) {
+      return { text: `${base} · last ${Math.floor(ageSec / 60)}m`, className: base === "running" ? "text-green-300" : "text-yellow-300" }
+    }
+    return { text: base === "running" ? "running · recent fill" : base, className: base === "running" ? "text-green-400" : "text-yellow-400" }
+  })()
   return (
     <div className="text-xs text-muted-foreground flex items-center gap-4 px-4 py-2 border-b border-border/40">
       <div>Mode: <span className={`${modeColor} font-mono`}>{mode}</span></div>
       <div>SDK: <span className={flags.enable_sdk ? "text-green-400" : "text-yellow-400"}>{flags.enable_sdk ? "on" : "off"}</span></div>
-      <div>Listener: <span className={flags.enable_user_ws ? (runtime?.listener === "running" ? "text-green-400" : "text-yellow-400") : "text-muted-foreground"}>{flags.enable_user_ws ? (runtime?.listener === "running" ? "running" : runtime?.listener || "idle") : "off"}</span></div>
+      <div>Listener: <span className={listenerState.className}>{listenerState.text}</span></div>
       {flags.allowed_symbols && (<div>Symbols: <span className="font-mono">{flags.allowed_symbols}</span></div>)}
       {(flags.exec_min_leverage != null && flags.exec_max_leverage != null) && (
         <div>Lev: <span className="font-mono">{flags.exec_min_leverage}–{flags.exec_max_leverage}x</span></div>

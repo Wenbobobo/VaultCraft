@@ -66,7 +66,9 @@ export function EventsFeed({ vaultId }: { vaultId: string }) {
       </div>
       <div className="space-y-2 max-h-64 overflow-auto pr-1">
         {items.length === 0 && (
-          <div className="text-sm text-muted-foreground">No events yet.</div>
+          <div className="text-sm text-muted-foreground">
+            No events yet — on Hyper testnet trades may wait for counterparties; check Listener status for last fill time.
+          </div>
         )}
         {items.filter((e) => {
           if (e.type?.startsWith('exec')) return filterExec
@@ -86,6 +88,9 @@ export function EventsFeed({ vaultId }: { vaultId: string }) {
               </div>
               {e.symbol && (
                 <div className="text-muted-foreground mt-1">{e.symbol} {e.side} {e.size ?? ""}</div>
+              )}
+              {typeof e.attempts === 'number' && (
+                <div className="text-muted-foreground mt-1">attempts: {e.attempts}</div>
               )}
               {e.error && (
                 <div className="text-destructive mt-1">{e.error}</div>

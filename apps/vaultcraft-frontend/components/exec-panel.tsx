@@ -97,6 +97,10 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
         setError(ackErr)
         toast({ title: "Execution warning", description: ackErr, variant: "destructive" })
       }
+      const attempts = typeof body?.attempts === "number" ? body.attempts : 1
+      if (!ackErr && attempts > 1) {
+        toast({ title: "Retried", description: `Exchange accepted on attempt ${attempts}.`, variant: "default" })
+      }
       setMsg(JSON.stringify(body, null, 2))
       if (body?.ok && !ackErr) {
         toast({ title: path.includes("open") ? "Order sent" : "Close sent", description: body.dry_run ? "Dry-run payload generated" : "Check events feed for fills." })

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.user_listener import _extract_fills, process_user_event
+from app.user_listener import _extract_fills, process_user_event, last_ws_event
 from app.positions import get_profile
 from app.events import store as event_store
 
@@ -36,3 +36,5 @@ def test_process_user_event_logs_ws_source(monkeypatch, tmp_path):
     process_user_event(vid, evt)
     events = event_store.list(vid)
     assert any(e.get("type") == "fill" and e.get("source") == "ws" for e in events)
+    ts = last_ws_event(vid)
+    assert isinstance(ts, float) and ts > 0.0
