@@ -3,8 +3,8 @@
 ## 当前进度（最新）
 
 - 文档
-  - PRD v0（docs/PRD.md）；Tech Design（docs/TECH_DESIGN.md）；架构解析（docs/ARCHITECTURE.md）；前端规范（docs/FRONTEND_SPEC.md）；配置清单（docs/CONFIG.md）；Hyper 集成（docs/HYPER_INTEGRATION.md）；Hyper 部署（docs/HYPER_DEPLOYMENT.md）
-  - v1 里程碑与验收清单：docs/PLAN_V1.md（黑客松演示范围 P0–P3；集中仓位相关移至 v2）
+  - PRD v0（../product/PRD.md）；Tech Design（../architecture/TECH_DESIGN.md）；架构解析（../architecture/ARCHITECTURE.md）；前端规范（../architecture/FRONTEND_SPEC.md）；配置清单（CONFIG.md）；Hyper 集成（../architecture/HYPER_INTEGRATION.md）；Hyper 部署（HYPER_DEPLOYMENT.md）
+  - v1 里程碑与验收清单：../product/PLAN_V1.md（黑客松演示范围 P0–P3；集中仓位相关移至 v2）
 - 合约（Hardhat + Foundry）
   - Vault（ERC20 shares，最短锁定、HWM 绩效费、私募白名单、适配器白名单、可暂停）
   - Hardhat 测试 + 覆盖率：Vault.sol statements 85.71%，branches 51.16%，functions 77.78%，lines 100%
@@ -14,12 +14,12 @@
     - 支持通过 `series` 查询参数喂入 NAV（测试/演示用）；生产接入存储/索引器
   - HyperHTTP 增强：`get_markets()`、`get_index_prices(symbols)`（测试用 monkeypatch，无需外网）
   - HyperExec 增强：杠杆区间校验（`min_leverage/max_leverage`）、`build_reduce_only()`
-  - Exec Service：最小名义金额校验（默认 $10）、close reduce-only fallback、事件打点（source=ack/ws）；`/api/v1/status` 返回运行态（listener/snapshot running/idle/disabled）；实单滑点默认 10bps（`EXEC_MARKET_SLIPPAGE_BPS` 可调），遇流动性错误按 `EXEC_RETRY_ATTEMPTS`/`EXEC_RETRY_BACKOFF_SEC` 退避重试；已成功验证 0.01 ETH 开仓（测试网平仓需等待对手单，详见 docs/ISSUES.md）。
+  - Exec Service：最小名义金额校验（默认 $10）、close reduce-only fallback、事件打点（source=ack/ws）；`/api/v1/status` 返回运行态（listener/snapshot running/idle/disabled）；实单滑点默认 10bps（`EXEC_MARKET_SLIPPAGE_BPS` 可调），遇流动性错误按 `EXEC_RETRY_ATTEMPTS`/`EXEC_RETRY_BACKOFF_SEC` 退避重试；已成功验证 0.01 ETH 开仓（测试网平仓需等待对手单，详见 ISSUES.md）。
   - 新增 API：GET `/api/v1/markets`、GET `/api/v1/price?symbols=`、GET `/api/v1/vaults`、GET `/api/v1/vaults/:id`
     - `markets` 从 `deployments/hyper-testnet.json` 读取配置对（BTC/ETH 5x 缺省）；`price` 采用 Hyper REST 助手（失败则回退确定性演示价格）
   - 新增价格路由：优先官方 Python SDK（启用需 `ENABLE_HYPER_SDK=1`），失败回落 REST，再回落演示价格
   - 后端测试：全部通过（`uv run pytest -q`）。修复了因 SDK 覆盖导致的价格端点单测不稳定：在测试 monkeypatch `HyperHTTP.get_index_prices` 时优先走 REST，且应用启动清空价格/NAV 缓存以保证确定性。
-  - 实单验证（Hyper Testnet）：已完成 ETH `0.01` 市价开仓与随后平仓（调整 `EXEC_MARKET_SLIPPAGE_BPS=50`、`EXEC_RO_SLIPPAGE_BPS=75`、`EXEC_RETRY_ATTEMPTS=2`），事件中记录 attempts；预检新增最小名义金额（默认 $10）。测试网若仍价带限制，可参考 docs/HYPER_DEPLOYMENT.md 的挂单/协同时序。
+  - 实单验证（Hyper Testnet）：已完成 ETH `0.01` 市价开仓与随后平仓（调整 `EXEC_MARKET_SLIPPAGE_BPS=50`、`EXEC_RO_SLIPPAGE_BPS=75`、`EXEC_RETRY_ATTEMPTS=2`），事件中记录 attempts；预检新增最小名义金额（默认 $10）。测试网若仍价带限制，可参考 HYPER_DEPLOYMENT.md 的挂单/协同时序。
   - Positions Store：环境变量 `POSITIONS_FILE` 统一解析为仓库根路径，避免不同工作目录生成多个副本。
 - 前端（Next.js+Tailwind）
   - 集成设计骨架并对接后端 API：
@@ -34,7 +34,7 @@
 
 ## 需求更新与排序（概览）
 
-- 已知问题（详见 docs/ISSUES.md）：
+- 已知问题（详见 ISSUES.md）：
   - Hydration mismatch：已修复 `mockVault`；如有其他警告，排查随机/时间依赖并改用 CSR。
 
 ### P0（Demo 必需）
@@ -82,7 +82,7 @@
 - v1 P3：脚本打磨与验收（骨架/空态、错误与降级提示、端到端走查）
 - v2：集中仓位与对账（Ingestor/Bus/Allocator/Reconciler 与四表），演示不启用
 
-详情与验收条款：见 docs/PLAN_V1.md
+详情与验收条款：见 ../product/PLAN_V1.md
 
 ---
 
@@ -99,14 +99,14 @@
 ## 环境与配置
 
 - Hyper Testnet：见 deployments/hyper-testnet.json（chainId 998，RPC 已配置）
-- 统一 env：仅根 `.env`，参数与说明见 README 与 docs/DEPLOYMENT.md
+- 统一 env：仅根 `.env`，参数与说明见 README 与 DEPLOYMENT.md
 
 ## 交接要点（给后续开发者）
 
 - 安全：默认 dry-run；需要真实下单时开启 ENABLE_LIVE_EXEC=1 且小额测试
-- 文档：README“统一环境变量”、docs/DEPLOYMENT.md（私钥格式与余额排错）、docs/DEMO_PLAN.md（评审脚本）
+- 文档：README“统一环境变量”、DEPLOYMENT.md（私钥格式与余额排错）、DEMO_PLAN.md（评审脚本）
 - 入口：Hardhat（部署）、FastAPI（后端）、Next.js（前端）
-- 故障：insufficient funds（给 ADDRESS 充测试币）；私钥格式（0x+64hex）；SSR/Hydration 与 `mockVault` 残留（详见 docs/ISSUES.md）
+- 故障：insufficient funds（给 ADDRESS 充测试币）；私钥格式（0x+64hex）；SSR/Hydration 与 `mockVault` 残留（详见 ISSUES.md）
 
 ---
 
@@ -130,8 +130,8 @@
 1. **USDC 流程优先**：若 `.env` 中设置 `NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS`（建议填 Hyper Testnet USDC），/manager 将默认载入该资产；只有缺失时才使用 “Dev: Deploy MockERC20” 辅助按钮。
 2. **Listener 条件**：开启 `ENABLE_LIVE_EXEC=1` 与 `ENABLE_USER_WS_LISTENER=1` 且 `ADDRESS` 对应执行私钥，否则事件流不会出现 `source: ws`。
 3. **Close Fallback**：`ENABLE_CLOSE_FALLBACK_RO=1` 时，平仓失败会自动尝试 Reduce-Only；若仍报错，可在事件流查看 payload 并手动调仓。
-4. **演示流程**：推荐顺序 Manager Checklist → Deploy → Manage/Exec → Deposit/Withdraw → Portfolio → Shock；详见 docs/DEMO_PLAN.md。
+4. **演示流程**：推荐顺序 Manager Checklist → Deploy → Manage/Exec → Deposit/Withdraw → Portfolio → Shock；详见 DEMO_PLAN.md。
 5. **测试**：保持 `uv run pytest -q` 与 `npx hardhat test` 通过。新增功能时同步补充单测，维持高覆盖率。
 6. **测试环境隔离**：pytest 启动时会强制将 `ENABLE_LIVE_EXEC`/`ENABLE_USER_WS_LISTENER` 设为 0，避免无意触发实单；如需在测试内验证实单逻辑，请显式覆盖环境变量。
-7. **实盘风险提示**：Hyper 测试网流动性有限，目前执行账号持有 ~0.01 ETH 多单；若需清仓请在订单簿有人对手时手动执行或挂单，具体报错与应对见 docs/ISSUES.md《Hyper Testnet 流动性稀薄》。
+7. **实盘风险提示**：Hyper 测试网流动性有限，目前执行账号持有 ~0.01 ETH 多单；若需清仓请在订单簿有人对手时手动执行或挂单，具体报错与应对见 ISSUES.md《Hyper Testnet 流动性稀薄》。
 8. **手动验收**：推荐 `.env` 设置 `EXEC_MARKET_SLIPPAGE_BPS=50`、`EXEC_RO_SLIPPAGE_BPS=75`、`EXEC_RETRY_ATTEMPTS=2`、`EXEC_RETRY_BACKOFF_SEC=2`，先 `exec-open`（dry-run/少量）后 `exec-close`；事件与 StatusBar 会展示 attempts 与最近 fill 时间。

@@ -89,4 +89,4 @@
   - 无效地址导致 ENS 查询报错 → 已在前端做地址校验并禁用按钮
   - 私募未白名单导致 deposit 失败 → 先在 Manager 白名单
   - RPC 断流或 SDK 不可用 → 价格回退 REST，Exec 走 dry‑run，UI 黄条提示
-- 文档入口：docs/PRD.md、docs/TECH_DESIGN.md、docs/ARCHITECTURE.md、docs/HYPER_DEPLOYMENT.md；计划清单见本文件
+- 文档入口：PRD（PRD.md）、Tech Design（../architecture/TECH_DESIGN.md）、架构解析（../architecture/ARCHITECTURE.md）、Hyper 部署（../ops/HYPER_DEPLOYMENT.md）；计划清单见本文件

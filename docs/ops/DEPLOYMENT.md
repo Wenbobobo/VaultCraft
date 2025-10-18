@@ -118,7 +118,7 @@ uv run uvicorn app.main:app --reload --port 8000
 - 市场与价格：`GET /api/v1/markets`、`GET /api/v1/price?symbols=BTC,ETH`
 - 金库与详情：`GET /api/v1/vaults`、`GET /api/v1/vaults/:id`
 
-可选：启用 Hyper 官方 SDK 作为行情源（见 docs/HYPER_DEPLOYMENT.md 第 2 节）。
+可选：启用 Hyper 官方 SDK 作为行情源（见 HYPER_DEPLOYMENT.md 第 2 节）。
 
 ### 4.2 前端（apps/vaultcraft-frontend）
 

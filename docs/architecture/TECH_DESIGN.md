@@ -189,7 +189,8 @@
   - `contracts/` Solidity 源码与 Foundry 测试
   - `apps/backend/` FastAPI 与 pytest
   - `apps/web/` 最小前端（可后置）
-  - `docs/` PRD 与 Tech Design
+  - `docs/product/` 产品文档（PRD、计划）
+  - `docs/architecture/` 技术设计与前端规范
 
 - Windows + PowerShell + uv
   - 后端
@@ -355,12 +356,12 @@ Windows 安装 Foundry（提示）
 - 背景：Synthetix 近期退出 Base，短期难以在 Base 测试网直连合约 perps。
 - 决策：
   - 演示链：继续支持 Base Sepolia（已有部署与前端读取）
-  - 执行/行情：v1 采用 Hyper Testnet，对接 Hyperliquid API 作为 perps 来源（详见 docs/HYPER_INTEGRATION.md）
+  - 执行/行情：v1 采用 Hyper Testnet，对接 Hyperliquid API 作为 perps 来源（详见 ./HYPER_INTEGRATION.md）
   - 架构：链上金库与服务端执行解耦；会计以 Exec/行情侧数据生成 NAV 承诺
 
 影响与行动：
 - Hardhat 已新增 `hyperTestnet` 网络占位（hardhat/hardhat.config.ts），待提供 RPC 与 chainId 即可部署
-- 文档新增：docs/HYPER_INTEGRATION.md、docs/ARCHITECTURE.md、docs/CONFIG.md
+- 文档新增：architecture/HYPER_INTEGRATION.md、architecture/ARCHITECTURE.md、ops/CONFIG.md
 - 前端保持链上读数 + 后端指标，perps 明细仅在 v1 后端展示，私募不公开持仓
 
 跨链与特殊资产：
