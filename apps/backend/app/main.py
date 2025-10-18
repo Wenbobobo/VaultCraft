@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Dict
 import os
 import json
@@ -33,6 +34,17 @@ def _repo_root() -> Path:
 REPO_ROOT = _repo_root()
 
 app = FastAPI(title="VaultCraft v0 API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")

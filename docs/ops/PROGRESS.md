@@ -135,3 +135,4 @@
 6. **测试环境隔离**：pytest 启动时会强制将 `ENABLE_LIVE_EXEC`/`ENABLE_USER_WS_LISTENER` 设为 0，避免无意触发实单；如需在测试内验证实单逻辑，请显式覆盖环境变量。
 7. **实盘风险提示**：Hyper 测试网流动性有限，目前执行账号持有 ~0.01 ETH 多单；若需清仓请在订单簿有人对手时手动执行或挂单，具体报错与应对见 ISSUES.md《Hyper Testnet 流动性稀薄》。
 8. **手动验收**：推荐 `.env` 设置 `EXEC_MARKET_SLIPPAGE_BPS=50`、`EXEC_RO_SLIPPAGE_BPS=75`、`EXEC_RETRY_ATTEMPTS=2`、`EXEC_RETRY_BACKOFF_SEC=2`，先 `exec-open`（dry-run/少量）后 `exec-close`；事件与 StatusBar 会展示 attempts 与最近 fill 时间。
+9. **本地 CORS**：后端默认允许 `http://localhost:3000` / `http://127.0.0.1:3000`，确保前端使用此域名启动；如需其它源，请调整 `apps/backend/app/main.py` 中的 `CORSMiddleware` 配置。
