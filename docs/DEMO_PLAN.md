@@ -8,6 +8,7 @@
   - PRIVATE_KEY（或 HYPER_TRADER_PRIVATE_KEY）+ ADDRESS（可选，仅用于监听回写）
   - ENABLE_HYPER_SDK=1；ENABLE_LIVE_EXEC=1（如需实单）；ENABLE_USER_WS_LISTENER=1（如需回写）；ENABLE_SNAPSHOT_DAEMON=1（可选）
   - EXEC_ALLOWED_SYMBOLS=BTC,ETH（风控白名单）
+  - EXEC_MARKET_SLIPPAGE_BPS=50 / EXEC_RO_SLIPPAGE_BPS=75 / EXEC_RETRY_ATTEMPTS=2 / EXEC_RETRY_BACKOFF_SEC=2（Hyper 测试网推荐值，主网可调低）
 - 余额：ADDRESS 有 Hyper Testnet gas
 - 启动：后台 `uvicorn app.main:app --reload --port 8000`；前台 `pnpm dev`（apps/vaultcraft-frontend）
 - 检查：前端页头 StatusBar（或 `/api/v1/status`）显示 Mode、SDK、Listener、Snapshot、chainId/block

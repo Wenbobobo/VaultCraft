@@ -14,12 +14,12 @@
     - 支持通过 `series` 查询参数喂入 NAV（测试/演示用）；生产接入存储/索引器
   - HyperHTTP 增强：`get_markets()`、`get_index_prices(symbols)`（测试用 monkeypatch，无需外网）
   - HyperExec 增强：杠杆区间校验（`min_leverage/max_leverage`）、`build_reduce_only()`
-  - Exec Service：最小名义金额校验（默认 $10）、close reduce-only fallback、事件打点（source=ack/ws）；`/api/v1/status` 返回运行态（listener/snapshot running/idle/disabled）；实盘滑点限制调至 10bps，成功验证 0.01 ETH 开仓（测试网流动性稀薄，平仓需等待对手单，详见 docs/ISSUES.md）。
+  - Exec Service：最小名义金额校验（默认 $10）、close reduce-only fallback、事件打点（source=ack/ws）；`/api/v1/status` 返回运行态（listener/snapshot running/idle/disabled）；实单滑点默认 10bps（`EXEC_MARKET_SLIPPAGE_BPS` 可调），遇流动性错误按 `EXEC_RETRY_ATTEMPTS`/`EXEC_RETRY_BACKOFF_SEC` 退避重试；已成功验证 0.01 ETH 开仓（测试网平仓需等待对手单，详见 docs/ISSUES.md）。
   - 新增 API：GET `/api/v1/markets`、GET `/api/v1/price?symbols=`、GET `/api/v1/vaults`、GET `/api/v1/vaults/:id`
     - `markets` 从 `deployments/hyper-testnet.json` 读取配置对（BTC/ETH 5x 缺省）；`price` 采用 Hyper REST 助手（失败则回退确定性演示价格）
   - 新增价格路由：优先官方 Python SDK（启用需 `ENABLE_HYPER_SDK=1`），失败回落 REST，再回落演示价格
   - 后端测试：全部通过（`uv run pytest -q`）。修复了因 SDK 覆盖导致的价格端点单测不稳定：在测试 monkeypatch `HyperHTTP.get_index_prices` 时优先走 REST，且应用启动清空价格/NAV 缓存以保证确定性。
-  - 实单验证（Hyper Testnet）：已完成 ETH `0.01` 市价开仓（SDK `market_open`）并写回事件与 NAV；预检新增最小名义金额（默认 $10）。平仓路径使用 `market_close(coin=...)`，若价带限制可能返回错误（已按错误映射到事件，不回写持仓）。
+  - 实单验证（Hyper Testnet）：已完成 ETH `0.01` 市价开仓与随后平仓（调整 `EXEC_MARKET_SLIPPAGE_BPS=50`、`EXEC_RO_SLIPPAGE_BPS=75`、`EXEC_RETRY_ATTEMPTS=2`），事件中记录 attempts；预检新增最小名义金额（默认 $10）。测试网若仍价带限制，可参考 docs/HYPER_DEPLOYMENT.md 的挂单/协同时序。
   - Positions Store：环境变量 `POSITIONS_FILE` 统一解析为仓库根路径，避免不同工作目录生成多个副本。
 - 前端（Next.js+Tailwind）
   - 集成设计骨架并对接后端 API：
@@ -134,3 +134,4 @@
 5. **测试**：保持 `uv run pytest -q` 与 `npx hardhat test` 通过。新增功能时同步补充单测，维持高覆盖率。
 6. **测试环境隔离**：pytest 启动时会强制将 `ENABLE_LIVE_EXEC`/`ENABLE_USER_WS_LISTENER` 设为 0，避免无意触发实单；如需在测试内验证实单逻辑，请显式覆盖环境变量。
 7. **实盘风险提示**：Hyper 测试网流动性有限，目前执行账号持有 ~0.01 ETH 多单；若需清仓请在订单簿有人对手时手动执行或挂单，具体报错与应对见 docs/ISSUES.md《Hyper Testnet 流动性稀薄》。
+8. **手动验收**：推荐 `.env` 设置 `EXEC_MARKET_SLIPPAGE_BPS=50`、`EXEC_RO_SLIPPAGE_BPS=75`、`EXEC_RETRY_ATTEMPTS=2`、`EXEC_RETRY_BACKOFF_SEC=2`，先 `exec-open`（dry-run/少量）后 `exec-close`；事件与 StatusBar 会展示 attempts 与最近 fill 时间。

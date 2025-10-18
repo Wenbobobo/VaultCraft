@@ -29,8 +29,10 @@ npm run ping:hyper
 - `ENABLE_LIVE_EXEC`：实单开关（默认 0，开启前务必小额）
 - `ENABLE_USER_WS_LISTENER`：用户事件监听回写（默认 0）
 - `ENABLE_SNAPSHOT_DAEMON` / `SNAPSHOT_INTERVAL_SEC`：后台快照
-- `EXEC_ALLOWED_SYMBOLS`、`EXEC_MIN/MAX_LEVERAGE`、`EXEC_MAX_NOTIONAL_USD`：风控
 - `EXEC_ALLOWED_SYMBOLS`、`EXEC_MIN/MAX_LEVERAGE`、`EXEC_MIN_NOTIONAL_USD`/`EXEC_MAX_NOTIONAL_USD`：风控（Hyper 最小下单 $10）
+- `EXEC_MARKET_SLIPPAGE_BPS`：市价/开仓滑点限制（默认 10bps，测试网可调高；示例 50）
+- `EXEC_RO_SLIPPAGE_BPS`：Reduce-Only 滑点（默认继承上项；示例 75）
+- `EXEC_RETRY_ATTEMPTS` / `EXEC_RETRY_BACKOFF_SEC`：流动性不足时的额外重试次数与间隔（示例 2 次 / 2s）
 - `APPLY_DRY_RUN_TO_POSITIONS` / `APPLY_LIVE_TO_POSITIONS`：是否回写头寸
 - `POSITIONS_FILE`：头寸文件路径
 - `EVENT_LOG_FILE`：事件日志（JSONL追加写）
@@ -138,5 +140,5 @@ uv run python -m app.cli positions:set 0x1234...5678 '{"cash":1000000,"positions
 - 市价平仓 `market_close` 使用 `coin` 参数；若 ACK 报 “Price too far from oracle”，通常为临时价带限制，可稍后重试或采用更小 `size`。
 - 监听器（WS）需 `ADDRESS` 与真实执行的钱包一致，否则不会收到成交事件。
 - 若启用 `ENABLE_CLOSE_FALLBACK_RO=1`，平仓失败会自动尝试 Reduce-Only 订单；若仍失败，可在事件流查看 error payload 并手动调整仓位。
-- 测试网常缺对手单：Exec Service 现将市价/Reduce-Only 的滑点限制在 10bps，若仍提示“could not immediately match”，请改用 CLI 提交挂单（如 `order_type={"limit":{"tif":"Gtc"}}`）等待撮合，或提前与协作者约定对敲。
+- 测试网常缺对手单：可在 `.env` 提高 `EXEC_MARKET_SLIPPAGE_BPS` / `EXEC_RO_SLIPPAGE_BPS`（例如 50 / 75 bps）并设置 `EXEC_RETRY_ATTEMPTS=2`、`EXEC_RETRY_BACKOFF_SEC=2`，仍失败则改用 CLI 提交挂单（如 `order_type={"limit":{"tif":"Gtc"}}`）或提前与协作者约定对敲。
 ```

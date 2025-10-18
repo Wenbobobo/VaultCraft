@@ -101,6 +101,9 @@ sequenceDiagram
 - EXEC_MIN_LEVERAGE=1.0 / EXEC_MAX_LEVERAGE=50.0
 - EXEC_MAX_NOTIONAL_USD=1000000000        # 名义金额上限
 - EXEC_MIN_NOTIONAL_USD=10                # 名义金额下限（Hyper最小下单$10）
+- EXEC_MARKET_SLIPPAGE_BPS=10             # 市价滑点（bps，可按需调高）
+- EXEC_RO_SLIPPAGE_BPS=10                 # Reduce-Only 滑点（空值则继承上项）
+- EXEC_RETRY_ATTEMPTS=0 / EXEC_RETRY_BACKOFF_SEC=1.0
 - APPLY_DRY_RUN_TO_POSITIONS=1            # dry-run 是否回写 positions
 - APPLY_LIVE_TO_POSITIONS=1               # live exec 是否回写 positions
 - POSITIONS_FILE=deployments/positions.json

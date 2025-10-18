@@ -50,7 +50,11 @@
 - HYPER_API_URL / HYPER_RPC_URL / HYPER_WS_URL：Hyper API / RPC / WS 地址
 - ENABLE_HYPER_SDK：启用官方 Python SDK 获取行情（默认 0）
 - ENABLE_LIVE_EXEC：启用实单执行（默认 0）
-- EXEC_*：风险与额度参数（allowed symbols/lev/notional）
+- EXEC_*：风险与额度参数（allowed symbols/lev/notional/slippage/retry）
+  - EXEC_MARKET_SLIPPAGE_BPS：市价/开仓滑点限制（默认 10 bps；测试网可适度调高）
+  - EXEC_RO_SLIPPAGE_BPS：Reduce-Only 滑点（留空时继承上项）
+  - EXEC_RETRY_ATTEMPTS：遇到“Price too far…”等错误时的额外重试次数（默认 0）
+  - EXEC_RETRY_BACKOFF_SEC：重试间隔秒数（默认 1.0）
 - ENABLE_CLOSE_FALLBACK_RO：实单 close 失败时是否尝试 Reduce-Only fallback（默认 1）
 - POSITIONS_FILE / EVENT_LOG_FILE：本地持仓/事件持久化（演示）
 
