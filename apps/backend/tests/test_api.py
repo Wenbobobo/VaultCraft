@@ -63,3 +63,25 @@ def test_status_has_state_fields():
     state = b.get("state")
     assert isinstance(state, dict)
     assert "listener" in state and "snapshot" in state
+
+
+def test_artifact_cors_allows_local_dev(monkeypatch, tmp_path):
+    """Ensure CORS middleware echoes arbitrary localhost origins."""
+    from app import main as main_module
+
+    original_root = main_module.REPO_ROOT
+    fake_root = tmp_path / "repo"
+    artifact_dir = fake_root / "hardhat" / "artifacts" / "contracts" / "Vault.sol"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "Vault.json").write_text('{"abi": [], "bytecode": "0x"}', encoding="utf-8")
+    try:
+        monkeypatch.setattr(main_module, "REPO_ROOT", fake_root)
+        client = TestClient(main_module.app)
+        r = client.get("/api/v1/artifacts/vault", headers={"Origin": "http://localhost:5173"})
+        assert r.status_code == 200
+        assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
+        r2 = client.get("/api/v1/artifacts/vault", headers={"Origin": "http://127.0.0.1:4200"})
+        assert r2.status_code == 200
+        assert r2.headers.get("access-control-allow-origin") == "http://127.0.0.1:4200"
+    finally:
+        monkeypatch.setattr(main_module, "REPO_ROOT", original_root)

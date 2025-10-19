@@ -14,6 +14,7 @@
     - 支持通过 `series` 查询参数喂入 NAV（测试/演示用）；生产接入存储/索引器
   - HyperHTTP 增强：`get_markets()`、`get_index_prices(symbols)`（测试用 monkeypatch，无需外网）
   - HyperExec 增强：杠杆区间校验（`min_leverage/max_leverage`）、`build_reduce_only()`
+  - CORS 现支持任意 `localhost`/`127.0.0.1` 端口（regex 匹配），解决 `localhost`⇄`127` 混用导致的 `Failed to fetch`；新增 `test_artifact_cors_allows_local_dev` 回归测试
   - Exec Service：最小名义金额校验（默认 $10）、close reduce-only fallback、事件打点（source=ack/ws）；`/api/v1/status` 返回运行态（listener/snapshot running/idle/disabled）；实单滑点默认 10bps（`EXEC_MARKET_SLIPPAGE_BPS` 可调），遇流动性错误按 `EXEC_RETRY_ATTEMPTS`/`EXEC_RETRY_BACKOFF_SEC` 退避重试；已成功验证 0.01 ETH 开仓（测试网平仓需等待对手单，详见 ISSUES.md）。
   - 新增 API：GET `/api/v1/markets`、GET `/api/v1/price?symbols=`、GET `/api/v1/vaults`、GET `/api/v1/vaults/:id`
     - `markets` 从 `deployments/hyper-testnet.json` 读取配置对（BTC/ETH 5x 缺省）；`price` 采用 Hyper REST 助手（失败则回退确定性演示价格）
@@ -26,6 +27,7 @@
     - Discover：`/api/v1/vaults`（失败回退本地示例）
     - 详情：`/api/v1/vaults/:id`、`/api/v1/nav_series/:id` 渲染 KPI 与 NAV 曲线
     - 新增 `StatusBar`（/status）、`EventsFeed`（/events）、可选 `ExecPanel`（/pretrade + /exec）
+  - Discover 页在 API 失败时展示提示文案（保留示例金库但提醒检查后端 & `NEXT_PUBLIC_BACKEND_URL`），Manager 部署/Dev Helper 请求增加状态码校验与友好的 “Failed to fetch” 提示
   - P0 修复：移除 `mockVault.*` 残留（统一 `vault.*`），避免 Hydration 报错；默认显示“Connect Wallet”按钮（Header/Hero）。
   - 导航调整：新增 Browse 页面（搜索/排序），About 跳转仓库；默认显示钱包按钮（Header/ Hero）。
   - Portfolio：改为真实链上读取 `balanceOf/ps/nextRedeemAllowed`，支持 Withdraw。

@@ -131,9 +131,20 @@ export default function ManagerPage() {
       if (!isHyper) throw new Error("Please switch to Hyper Testnet (chain 998)")
       if (!ethers.isAddress(asset)) throw new Error("Please enter a valid asset ERC20 address (e.g. Hyper USDC)")
       // fetch artifact from backend
-      const r = await fetch(`${BACKEND_URL}/api/v1/artifacts/vault`)
-      const art = await r.json()
-      if (!art?.bytecode || !art?.abi) throw new Error(art?.error || "Artifact not available")
+      const r = await fetch(`${BACKEND_URL}/api/v1/artifacts/vault`, { headers: { Accept: "application/json" } })
+      let art: any = null
+      try {
+        art = await r.json()
+      } catch {
+        art = null
+      }
+      if (!r.ok) {
+        const statusMsg = art?.error || `Artifact fetch failed (status ${r.status})`
+        throw new Error(statusMsg)
+      }
+      if (!art?.bytecode || !art?.abi) {
+        throw new Error(art?.error || "Artifact not available. Run `npx hardhat compile` then restart the backend.")
+      }
       const eth = (window as any).ethereum
       const provider = new ethers.BrowserProvider(eth)
       const signer = await provider.getSigner()
@@ -150,7 +161,12 @@ export default function ManagerPage() {
       // optional: register for discovery
       try { await fetch(`${BACKEND_URL}/api/v1/register_deployment?vault=${addr}&asset=${asset}`, { method: 'POST' }) } catch {}
     } catch (e: any) {
-      setDeployErr(e?.shortMessage || e?.message || String(e))
+      const raw = e?.shortMessage || e?.message || String(e)
+      if (typeof raw === "string" && raw.includes("Failed to fetch")) {
+        setDeployErr("无法访问后端 API。请确认 FastAPI 服务已运行，并在 .env 中设置 NEXT_PUBLIC_BACKEND_URL 指向后端主机（例如 http://localhost:8000）。")
+      } else {
+        setDeployErr(raw)
+      }
     }
   }
 
@@ -196,9 +212,17 @@ export default function ManagerPage() {
     setDevMsg(null)
     try {
       await connect()
-      const artRes = await fetch(`${BACKEND_URL}/api/v1/artifacts/mockerc20`)
-      const art = await artRes.json()
-      if (!art?.bytecode || !art?.abi) throw new Error(art?.error || "MockERC20 artifact not available")
+      const artRes = await fetch(`${BACKEND_URL}/api/v1/artifacts/mockerc20`, { headers: { Accept: "application/json" } })
+      let art: any = null
+      try {
+        art = await artRes.json()
+      } catch {
+        art = null
+      }
+      if (!artRes.ok) {
+        throw new Error(art?.error || `MockERC20 artifact fetch failed (status ${artRes.status})`)
+      }
+      if (!art?.bytecode || !art?.abi) throw new Error(art?.error || "MockERC20 artifact not available. Run `npx hardhat compile` then restart backend.")
       const eth = (window as any).ethereum
       const provider = new ethers.BrowserProvider(eth)
       const signer = await provider.getSigner()
@@ -216,7 +240,12 @@ export default function ManagerPage() {
       setAsset(addr)
       setDevMsg(`Mock asset deployed: ${addr} and minted 1,000,000 to you`)
     } catch (e: any) {
-      setDevMsg(e?.shortMessage || e?.message || String(e))
+      const raw = e?.shortMessage || e?.message || String(e)
+      if (typeof raw === "string" && raw.includes("Failed to fetch")) {
+        setDevMsg("无法访问后端 API。请确认 FastAPI 服务运行中，或配置 NEXT_PUBLIC_BACKEND_URL 指向后端地址。")
+      } else {
+        setDevMsg(raw)
+      }
     }
   }
 

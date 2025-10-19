@@ -99,12 +99,14 @@ export function VaultDiscovery() {
   const [q, setQ] = useState("")
 
   const [vaults, setVaults] = useState(fallbackVaults)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
     getVaults()
       .then((v) => {
         if (!alive) return
+         setLoadError(null)
         // merge minimal API data into display-friendly mock-like shape with defaults
         const enriched = v.map((x) => ({
           id: x.id,
@@ -121,8 +123,13 @@ export function VaultDiscovery() {
         }))
         setVaults(enriched)
       })
-      .catch(() => {
+      .catch((err) => {
         // ignore; keep fallback
+        if (!alive) return
+        setLoadError(
+          "Backend API未响应，当前展示为示例金库。请确认 FastAPI 服务已启动，并在 .env 中配置 NEXT_PUBLIC_BACKEND_URL 指向后端。"
+        )
+        console.warn("VaultDiscovery fallback due to API error", err)
       })
     return () => {
       alive = false
@@ -148,6 +155,11 @@ export function VaultDiscovery() {
         <div className="mb-10">
           <h2 className="text-3xl font-bold mb-2">Discover Vaults</h2>
           <p className="text-muted-foreground">Verified trader vaults with transparent performance metrics</p>
+          {loadError && (
+            <div className="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+              {loadError}
+            </div>
+          )}
         </div>
 
         <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

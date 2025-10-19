@@ -11,7 +11,10 @@ from .navcalc import snapshot_now
 from .price_provider import PriceRouter
 import json
 import time
-from hyperliquid.exchange import Exchange  # type: ignore
+try:  # pragma: no cover - optional dependency for tests
+    from hyperliquid.exchange import Exchange  # type: ignore
+except Exception:  # pragma: no cover
+    Exchange = None  # type: ignore[assignment]
 
 RETRYABLE_ERROR_SNIPPETS = (
     "price too far from oracle",
@@ -62,6 +65,8 @@ class HyperSDKDriver(ExecDriver):
             from eth_account import Account  # type: ignore
         except Exception as e:  # pragma: no cover
             raise RuntimeError("hyperliquid SDK not available") from e
+        if Exchange is None:
+            raise RuntimeError("hyperliquid SDK not available")
         env = Settings()
         pk = private_key or env.HYPER_TRADER_PRIVATE_KEY or env.PRIVATE_KEY
         if pk:
