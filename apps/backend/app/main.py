@@ -18,6 +18,7 @@ from .exec_service import ExecService
 from .daemon import SnapshotDaemon
 from .user_listener import UserEventsListener, last_ws_event
 from .hyper_client import HyperHTTP
+from .alerts import manager as alert_manager
 
 
 def _repo_root() -> Path:
@@ -197,6 +198,10 @@ def api_nav_snapshot(address: str, nav: float | None = None, ts: float | None = 
         nav = round(nav_val / profile.get("denom", 1_000_000.0), 6)
     snapshot_store.add(address, float(nav), ts)
     _nav_cache.clear()
+    try:
+        alert_manager.on_nav(address, float(nav))
+    except Exception:
+        pass
     return {"ok": True, "address": address, "nav": nav}
 
 

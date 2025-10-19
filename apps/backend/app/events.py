@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Dict, List, Any
 import time
 
+from .alerts import manager as alert_manager
+
 
 class EventStore:
     def __init__(self, log_file: str | None = None, capacity: int = 2000):
@@ -27,6 +29,10 @@ class EventStore:
                     f.write(json.dumps({"vault": vault, **event}, ensure_ascii=False) + "\n")
             except Exception:
                 pass
+        try:
+            alert_manager.on_event(vault, event)
+        except Exception:
+            pass
 
     def list(
         self,

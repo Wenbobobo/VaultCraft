@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     SNAPSHOT_INTERVAL_SEC: float = 15.0
     # User WS listener for live fills write-back
     ENABLE_USER_WS_LISTENER: bool = False
+    # Alerts
+    ALERT_WEBHOOK_URL: str | None = None
+    ALERT_COOLDOWN_SEC: float = 120.0
+    ALERT_NAV_DRAWDOWN_PCT: float = 0.05
 
     # pydantic v2: model_config covers env loading and extra handling
 
