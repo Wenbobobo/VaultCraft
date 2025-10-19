@@ -55,6 +55,9 @@
   - EXEC_RO_SLIPPAGE_BPS：Reduce-Only 滑点（留空时继承上项）
   - EXEC_RETRY_ATTEMPTS：遇到“Price too far…”等错误时的额外重试次数（默认 0）
   - EXEC_RETRY_BACKOFF_SEC：重试间隔秒数（默认 1.0）
+- ALERT_WEBHOOK_URL：告警 webhook 地址（例如 `https://fwalert.com/...`），为空则不发送
+- ALERT_COOLDOWN_SEC：告警冷却秒数（默认 120）
+- ALERT_NAV_DRAWDOWN_PCT：NAV 回撤触发阈值（默认 0.05，即 5%）
 - ENABLE_CLOSE_FALLBACK_RO：实单 close 失败时是否尝试 Reduce-Only fallback（默认 1）
 - POSITIONS_FILE / EVENT_LOG_FILE：本地持仓/事件持久化（演示）
 

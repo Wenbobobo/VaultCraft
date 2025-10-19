@@ -104,6 +104,9 @@ sequenceDiagram
 - EXEC_MARKET_SLIPPAGE_BPS=10             # 市价滑点（bps，可按需调高）
 - EXEC_RO_SLIPPAGE_BPS=10                 # Reduce-Only 滑点（空值则继承上项）
 - EXEC_RETRY_ATTEMPTS=0 / EXEC_RETRY_BACKOFF_SEC=1.0
+- ALERT_WEBHOOK_URL=https://fwalert.com/...   # 告警 webhook 地址（留空禁用）
+- ALERT_COOLDOWN_SEC=120               # 同类告警冷却秒数
+- ALERT_NAV_DRAWDOWN_PCT=0.05          # NAV 回撤触发阈值（默认 5%）
 - APPLY_DRY_RUN_TO_POSITIONS=1            # dry-run 是否回写 positions
 - APPLY_LIVE_TO_POSITIONS=1               # live exec 是否回写 positions
 - POSITIONS_FILE=deployments/positions.json

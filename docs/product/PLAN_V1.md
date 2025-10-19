@@ -69,15 +69,17 @@
 
 ---
 
-## v2（集中仓位与对账，演示不启用）
+## v2（多资产与私募增强，集中仓位延后评估）
 
 范围与目标：
-- 模块：Order Ingestor / Execution Bus / Fill Allocator / Reconciler 四模块
-- 数据表：orders / bus_orders / fills / allocations（SQLite 起步）
-- 分摊算法：按未成交额权重；误差桶；价格带校验
-- 对账：Σallocations vs 外部账户权益；漂移阈值与后台降级（reduce‑only/暂停聚合）；UI 黄条提示
-- 承诺：NAV 序列 Merkle root（可选上链）
-- 报警：Webhook（px_spike/nav_drawdown/state_change）与节流/去抖
+- 会计与申赎：延续 `deposit() -> mint shares` 机制，默认无锁期，改以手续费率曲线管理早退；单位净值（PS）不受申赎影响。
+- 多品种接入：Router/Adapter 扩展至 Polymarket、主要美股、贵金属（XAU 等）、期权等市场，按 `venue_whitelist`、`risk_envelope` 暴露敞口限制。
+- WhisperFi 集成：为私募 Vault 引入 WhisperFi（或等效模块）以保护执行隐私，投前仅摘要，投后仅 NAV/PnL；保留审计用凭证与稽核接口。
+- 执行模式：经理绑定 API 钱包或由平台生成子账户；前端票据经 `execute` 触发，`execution_channel=onchain` 时链上成交，`off_venue` 时后端 SDK 执行、回链写入 Ack/Fills；平台不做集中仓位，只负责限权与路由。
+- 指标与风控：平台监听事件生成 NAV/Merkle 承诺，监控延迟、对账漂移触发 reduce-only、排队/拒单、电话告警与黄条提示（无强平）。
+- Vault 组合器：创建新 Vault 时可引用既有 Vault 作为按比例建仓模板，实现“策略组合/跟单”与自动化策略拼装。
+- 体验优化：前端提供跨市场筛选、对冲推荐、告警订阅，多语言支持（含中文）；后端开放更多指标 API。
+- 运维文档：补充多市场部署、WhisperFi 接入、风控口径、TDD 模板。
 
 ---
 

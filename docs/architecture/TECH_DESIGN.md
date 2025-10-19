@@ -129,16 +129,16 @@
   - `vault`、`account`、`added_at`
 
 - 表（新增）`orders`
-  - `id`、`vault`、`market`、`side`、`notional`、`leverage`、`reduce_only`、`tif`、`status`、`created_at`
-
-- 表（新增）`bus_orders`
-  - `id`、`market`、`side`、`agg_notional`、`status`、`created_at`
+  - `id`、`vault`、`venue`、`market`、`side`、`size`、`notional`、`leverage`、`reduce_only`、`tif`、`execution_channel`、`status`、`created_at`
 
 - 表（新增）`fills`
-  - `id`、`bus_order`、`price`、`qty`、`fee`、`ts`
+  - `id`、`order_id`、`venue`、`price`、`qty`、`fee`、`ts`、`source`（ack/ws）
 
-- 表（新增）`allocations`
-  - `fill_id`、`vault`、`qty_alloc`、`value_alloc`、`fee_alloc`
+- 表（新增）`nav_snapshots`
+  - `vault`、`ts`、`nav`、`merkle_root`
+
+- 表（新增）`positions_state`
+  - `vault`、`payload`（各 venue 仓位 JSON）、`updated_at`
 
 ---
 
@@ -151,17 +151,14 @@
 
 ---
 
-## 5) Off‑chain 执行路径（v1）
+## 5) 执行路径与渠道（v1 → v2）
 
-- Order Ingestor：接收金库订单，校验风险（允许市场/杠杆/名义上限），写入 `orders`
-- Execution Bus：按市场/方向聚合 `orders(NEW)` → 生成 `bus_orders` → 调用外部交易所（Hyper）
-- Fill Allocator：按未成交额权重分摊 `fills` 到 `allocations`
-- Reconciler：定期对账（Σallocations vs 账户权益）；漂移超阈值触发降级（reduce-only/暂停聚合）
-- NAV 算法：`NAV = 现金腿 + Σ(alloc_qty × index_price − alloc_val − fee)`；每 60s 记录 `NavSnapshot`，可生成 NAV 序列的 Merkle root 作为承诺
-
-错误码/事件（新增建议）：
-- `ErrReconcileDrift`（对账漂移过大）
-- `ErrPriceBandBreach`（成交偏离指数价带宽）
+- Exec Service 接收前端“订单票据”，校验 `venue_whitelist`、杠杆、名义等风险，并基于 `execution_channel` 路由：
+  - `onchain`：直接调用链上 Router/Adapter。
+  - `off_venue`：通过 Hyper SDK（或未来其它 venue SDK）下单，记录 Ack/Fills 并将回执写回链上/数据库。
+- UserEventsListener / REST Ack => Indexer：汇总成交，更新 `positions.json`、`nav_snapshots.json`，触发 Alert Manager。
+- NAV 计算：`NAV = 现金腿 + Σ(position × index_price)`；按窗口生成 NAV 序列与 Merkle root（可上链承诺）。
+- 降级策略：当 off-venue 回执延迟或对账漂移超过阈值，触发 reduce-only、排队或拒单；不做集中清算。
 - `ErrReduceOnly`（在 RO 模式下尝试开仓）
 
 降级策略：
@@ -364,9 +361,9 @@ Windows 安装 Foundry（提示）
 - 文档新增：architecture/HYPER_INTEGRATION.md、architecture/ARCHITECTURE.md、ops/CONFIG.md
 - 前端保持链上读数 + 后端指标，perps 明细仅在 v1 后端展示，私募不公开持仓
 
-跨链与特殊资产：
-- v1：只读与会计层支持（不迁移资金），以合成头寸与 NAV 展现
-- v2：桥接/消息与集中会计（跨链 Orchestrator + 多链 Adapter）
+跨市场扩展：
+- v1：维持 Hyper Testnet 作为主执行场；新增多市场行情/指标抽象，以便后续适配。
+- v2：为 Polymarket、美股、贵金属、期权等接入 Adapter，仍由各 Vault 独立路由执行；平台负责额度、限权、指标与告警，不集中仓位。
 
 ---
 

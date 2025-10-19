@@ -60,19 +60,23 @@
 - 前端：Manager Exec 面板联动（展示订单/分摊/对账状态），金库页风险提示栏显示 RO/异常状态
  - Manager 扩展：Adapter 管理、Guardian/Manager 变更、部署记录写回。
 
-- P0（立即）
-  - 为 `/api/v1/nav/:address` 接入真实 NAV 数据源（简单版：后端注册表中的头寸 + 价格 → `pnl_to_nav` 计算），并增加内存/SQLite 缓存
-  - 补充 `/api/v1/vaults` 数据来源（从 deployments 或后端注册表），保留私募不披露持仓的约束
-- P1（短期）
-  - Exec Service：open/close/reduce（env 开关，默认 dry-run），并记录成交事件到后端存储（仅展示 NAV，不披露私募持仓）
-  - NAV 快照与（可选）上链快照任务；后端分页与窗口化返回 NAV 序列
-  - Hardhat：添加基于 Exec 的 mock 测试（不依赖真实网络）
-- P2（后续）
-  - 容量/拥挤函数、批量窗口、告警通道、Manager Console（参数调整、白名单、限权）
- - 跨链只读会计 → 桥接/消息 Orchestrator（v2）
-  - 私募邀请码签名校验与服务端管理
-  - 在线创建 Vault 表单化（替代 Hardhat 任务）
-  - Webhook 报警（nav_drawdown/px_spike/state_change）与去抖节流
+- **v1 完成度速览（2025-10-19）**
+
+  | 模块 | P0 | P1 | P2 | P3 |
+  | --- | --- | --- | --- | --- |
+  | 合约 & Hardhat | ✅ 份额/锁期/HWM/白名单/暂停，测试覆盖率 85%+ | ✅ Adapter/Guardian 调整入口 | ✅ Hyper Testnet 部署脚本与配置 | ⏳ Demo 剧本全链路复盘 |
+  | 后端 (FastAPI) | ✅ `/status` `/nav_series` `/events` `/metrics` | ✅ Listener/Exec Service/风险提示；待实网验证 `source="ws"` | ✅ SDK 下单（dry-run / live 受控），NAV 快照 | ⏳ 异常回退/压测脚本 |
+  | 前端 (Next.js) | ✅ Discover / Vault / Portfolio / Manager / Status Bar | ✅ Manager 标签页 + Vault 下拉 + 高级折叠 | ✅ Exec Panel + 风险提示 + NAV 图 | 🔄 Skeleton/空态全面打磨 |
+  | 告警/可观测 | ✅ Shock → Drawdown Banner | ✅ Webhook 触发器（nav & exec error） | 🔄 电话告警演示脚本 | 🔄 冷却/节流压测 |
+
+  > 图例：✅ 已满足验收；🔄 进行中；⏳ 待回归/验证。
+
+- **v1 当前待办 / 风险**
+  - [ ] Listener e2e 验证：在 Hyper Testnet 实测 `source:"ws"` 并将流程写入 DEMO_PLAN（含截图与复现步骤）。
+  - [ ] Demo 剧本回归：自测“创建 → 申购 → 下单 → Shock → 告警”，确认 Skeleton/空态/提示完整并更新 DEMO_PLAN。
+  - [ ] 空态与提示：Manager/Discover/Portfolio Skeleton、错误提示再打磨，准备 Showcase 截图。
+  - [ ] Alert 演示指引：在 DEMO_PLAN 中补充 webhook 演示提示（如何触发 drawdown、冷却/降级说明）。
+
 
 ---
 
@@ -112,6 +116,15 @@
 
 ---
 
+
+## v2 展望（更新）
+- 多品种接入：Polymarket、美股、贵金属、期权等适配器；保持资金留在 Vault，仅路由限权。
+- WhisperFi 私募增强：投前摘要、投后 NAV、隐私执行凭证。
+- Vault Composer：支持新 Vault 复用既有 Vault 作为按比例建仓模块或自动化策略组合。
+- 手续费率曲线：默认无锁期，按持有时长/波动段收费；需要 Backtest 与 UI。
+- Alert & Reporting：多语言（含中文）、告警订阅、Merke 承诺展示。
+
+
 ## 多端协同开发同步清单（Dev Sync Checklist）
 
 - 统一环境：仅根 `.env` 生效；前端读取 `NEXT_PUBLIC_*`；Hardhat/Backend 共用 `HYPER_*` 与私钥。
@@ -138,3 +151,4 @@
 7. **实盘风险提示**：Hyper 测试网流动性有限，目前执行账号持有 ~0.01 ETH 多单；若需清仓请在订单簿有人对手时手动执行或挂单，具体报错与应对见 ISSUES.md《Hyper Testnet 流动性稀薄》。
 8. **手动验收**：推荐 `.env` 设置 `EXEC_MARKET_SLIPPAGE_BPS=50`、`EXEC_RO_SLIPPAGE_BPS=75`、`EXEC_RETRY_ATTEMPTS=2`、`EXEC_RETRY_BACKOFF_SEC=2`，先 `exec-open`（dry-run/少量）后 `exec-close`；事件与 StatusBar 会展示 attempts 与最近 fill 时间。
 9. **本地 CORS**：后端默认允许 `http://localhost:3000` / `http://127.0.0.1:3000`，确保前端使用此域名启动；如需其它源，请调整 `apps/backend/app/main.py` 中的 `CORSMiddleware` 配置。
+10. **告警配置**：若需电话/短信告警，请在 `.env` 配置 `ALERT_WEBHOOK_URL`（例如 fwalert 链路）、`ALERT_COOLDOWN_SEC`、`ALERT_NAV_DRAWDOWN_PCT`，演示前可先用 Shock 或模拟 exec error 验证。
