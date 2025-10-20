@@ -10,7 +10,10 @@ const VAULT_ABI = [
   "function performanceFeeP() view returns (uint256)",
   "function lockMinSeconds() view returns (uint256)",
   "function isPrivate() view returns (bool)",
+  "function asset() view returns (address)",
 ]
+
+const ERC20_ABI = ["function decimals() view returns (uint8)"]
 
 export type OnchainVault = {
   unitNav?: number
@@ -19,6 +22,7 @@ export type OnchainVault = {
   perfFeeP?: number
   totalSupply?: number
   isPrivate?: boolean
+  assetAddress?: string
 }
 
 export function useOnchainVault(address: string) {
@@ -34,23 +38,36 @@ export function useOnchainVault(address: string) {
       if (!provider || !ethers.isAddress(address)) return
       try {
         const vault = new ethers.Contract(address, VAULT_ABI, provider)
-        const [ps, assets, supply, fee, lock, priv] = await Promise.all([
+        const [ps, assets, supply, fee, lock, priv, assetAddr] = await Promise.all([
           vault.ps(),
           vault.totalAssets(),
           vault.totalSupply(),
           vault.performanceFeeP(),
           vault.lockMinSeconds(),
           vault.isPrivate(),
+          vault.asset(),
         ])
+        let assetDecimals = 18
+        if (ethers.isAddress(assetAddr)) {
+          try {
+            const token = new ethers.Contract(assetAddr, ERC20_ABI, provider)
+            assetDecimals = await token.decimals()
+          } catch (err) {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("[useOnchainVault] asset decimals lookup failed", err)
+            }
+          }
+        }
         if (cancelled) return
         const nav = Number(ps) / 1e18
         setData({
           unitNav: nav,
-          aum: Number(assets) / 1e18,
+          aum: Number(ethers.formatUnits(assets, assetDecimals)),
           lockDays: Math.floor(Number(lock) / 86400),
           perfFeeP: Number(fee),
           totalSupply: Number(supply) / 1e18,
           isPrivate: Boolean(priv),
+          assetAddress: ethers.isAddress(assetAddr) ? assetAddr : undefined,
         })
       } catch (e) {
         if (process.env.NODE_ENV !== "production") {

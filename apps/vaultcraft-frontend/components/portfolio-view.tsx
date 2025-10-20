@@ -16,12 +16,17 @@ type Position = {
   vaultName: string
   shares: number
   unitNav: number
+  currentValue: number
   unlockDate: Date | null
+  assetSymbol?: string
+  walletBalance?: number | null
+  assetAddress?: string
 }
 
 export function PortfolioView() {
   const { connected, address } = useWallet()
   const [positions, setPositions] = useState<Position[]>([])
+  const [walletBalances, setWalletBalances] = useState<{ symbol: string; amount: number }[]>([])
   const [wdOpen, setWdOpen] = useState<string | null>(null)
 
   useEffect(() => {
@@ -29,33 +34,86 @@ export function PortfolioView() {
     async function load() {
       try {
         const list = await getVaults()
-        if (!list.length || !address) { setPositions([]); return }
+        if (!list.length || !address) {
+          if (alive) {
+            setPositions([])
+            setWalletBalances([])
+          }
+          return
+        }
         const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_RPC_URL)
         const VAULT_ABI = [
           "function balanceOf(address) view returns (uint256)",
           "function ps() view returns (uint256)",
           "function nextRedeemAllowed(address) view returns (uint256)",
+          "function asset() view returns (address)",
+        ]
+        const ERC20_ABI = [
+          "function decimals() view returns (uint8)",
+          "function symbol() view returns (string)",
+          "function balanceOf(address) view returns (uint256)",
         ]
         const out: Position[] = []
+        const walletMap = new Map<string, { symbol: string; amount: number }>()
+
         for (const v of list) {
           const c = new ethers.Contract(v.id, VAULT_ABI, provider)
           try {
-            const [bal, ps, lock] = await Promise.all([
-              c.balanceOf(address), c.ps(), c.nextRedeemAllowed(address)
+            const [bal, ps, lock, assetAddr] = await Promise.all([
+              c.balanceOf(address),
+              c.ps(),
+              c.nextRedeemAllowed(address),
+              c.asset(),
             ])
-            const shares = Number(bal) / 1e18
-            if (shares > 0) {
-              out.push({
-                vaultId: v.id,
-                vaultName: v.name,
-                shares,
-                unitNav: Number(ps) / 1e18,
-                unlockDate: Number(lock) > 0 ? new Date(Number(lock) * 1000) : null,
-              })
+            const shares = Number(ethers.formatUnits(bal, 18))
+            if (shares <= 0) continue
+            let assetSymbol: string | undefined
+            let walletBalance: number | null = null
+            let assetDecimals = 18
+            if (ethers.isAddress(assetAddr)) {
+              try {
+                const token = new ethers.Contract(assetAddr, ERC20_ABI, provider)
+                const [decimals, symbol, walletBal] = await Promise.all([
+                  token.decimals(),
+                  token.symbol(),
+                  token.balanceOf(address),
+                ])
+                assetDecimals = Number(decimals)
+                assetSymbol = symbol || undefined
+                walletBalance = Number(ethers.formatUnits(walletBal, assetDecimals))
+                const key = ethers.getAddress(assetAddr)
+                walletMap.set(key, {
+                  symbol: assetSymbol || key.slice(0, 6),
+                  amount: walletBalance,
+                })
+              } catch (err) {
+                if (process.env.NODE_ENV !== "production") {
+                  console.warn("[PortfolioView] asset lookup failed", err)
+                }
+              }
             }
-          } catch {}
+            const unitNav = Number(ethers.formatUnits(ps, 18))
+            out.push({
+              vaultId: v.id,
+              vaultName: v.name,
+              shares,
+              unitNav,
+              currentValue: shares * unitNav,
+              unlockDate: Number(lock) > 0 ? new Date(Number(lock) * 1000) : null,
+              assetSymbol,
+              walletBalance,
+              assetAddress: ethers.isAddress(assetAddr) ? ethers.getAddress(assetAddr) : undefined,
+            })
+          } catch (err) {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("[PortfolioView] vault load failed", err)
+            }
+          }
         }
-        if (alive) setPositions(out)
+        if (alive) {
+          setPositions(out)
+          setWalletBalances(Array.from(walletMap.values()))
+        }
       } catch {}
     }
     load()
@@ -63,10 +121,11 @@ export function PortfolioView() {
     return () => { alive = false; clearInterval(id) }
   }, [address])
 
-  const totalValue = useMemo(() => positions.reduce((s, p) => s + p.shares * p.unitNav, 0), [positions])
+  const totalValue = useMemo(() => positions.reduce((s, p) => s + p.currentValue, 0), [positions])
   const totalCost = useMemo(() => positions.reduce((s, p) => s + p.shares * 1.0, 0), [positions])
   const totalPnL = totalValue - totalCost
   const totalPnLPercent = totalCost > 0 ? (totalValue / totalCost - 1) * 100 : 0
+  const primaryWalletBalance = walletBalances.length ? walletBalances[0] : null
 
   return (
     <section className="py-12">
@@ -95,11 +154,26 @@ export function PortfolioView() {
               {totalPnLPercent.toFixed(2)}%)
             </div>
           </Card>
+          {primaryWalletBalance && (
+            <Card className="p-6 gradient-card border-border/40">
+              <div className="text-sm text-muted-foreground mb-2">Wallet Balance ({primaryWalletBalance.symbol})</div>
+              <div className="text-3xl font-bold font-mono">{primaryWalletBalance.amount.toFixed(2)}</div>
+            </Card>
+          )}
         </div>
+
+        {walletBalances.length > 1 && (
+          <div className="mb-8 text-sm text-muted-foreground flex flex-wrap gap-3">
+            {walletBalances.map((wb) => (
+              <span key={wb.symbol} className="px-3 py-1 rounded-full border border-border/40 bg-muted/40 font-mono">
+                {wb.symbol}: {wb.amount.toFixed(2)}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="space-y-4">
           {positions.map((position) => {
-            const currentValue = position.shares * position.unitNav
             const isLocked = position.unlockDate ? (position.unlockDate > new Date()) : false
 
             return (
@@ -117,9 +191,17 @@ export function PortfolioView() {
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">Current Value</div>
-                      <div className="font-semibold font-mono">${currentValue.toFixed(2)}</div>
-                      <div className="text-[10px] text-muted-foreground">Assumes entry NAV ≈ 1.0</div>
+                      <div className="font-semibold font-mono">${position.currentValue.toFixed(2)}</div>
+                      <div className="text-[10px] text-muted-foreground">NAV × Shares</div>
                     </div>
+                    {position.assetSymbol && (
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Wallet Balance</div>
+                        <div className="font-semibold font-mono">
+                          {position.walletBalance != null ? `${position.walletBalance.toFixed(2)} ${position.assetSymbol}` : "—"}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">Status</div>
                       {isLocked ? (

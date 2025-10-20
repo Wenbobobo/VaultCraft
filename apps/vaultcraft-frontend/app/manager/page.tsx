@@ -54,8 +54,9 @@ export default function ManagerPage() {
   const [activeTab, setActiveTab] = useState<"launch" | "execute" | "settings">("launch")
   const { connect, isHyper, address, ensureHyperChain } = useWallet()
   const [asset, setAsset] = useState(DEFAULT_ASSET_ADDRESS)
-  const [name, setName] = useState("VaultCraft")
-  const [symbol, setSymbol] = useState("VSHARE")
+  const [slug] = useState(() => Date.now().toString(36).toUpperCase())
+  const [name, setName] = useState(() => `Vault-${slug}`)
+  const [symbol, setSymbol] = useState(() => `V${slug.slice(-4)}`)
   const [isPrivate, setIsPrivate] = useState(false)
   const [pBps, setPBps] = useState("1000")
   const [lockDays, setLockDays] = useState("1")
@@ -139,14 +140,25 @@ export default function ManagerPage() {
       const res = await fetch(`${BACKEND_URL}/api/v1/vaults`)
       const body = await res.json().catch(() => ({}))
       const list = Array.isArray(body?.vaults) ? body.vaults : []
-      const normalized: VaultSummary[] = list
-        .filter((item: any) => typeof item?.id === "string")
-        .map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          type: item.type,
-          asset: item.asset,
-        }))
+      const seen = new Set<string>()
+      const normalized: VaultSummary[] = []
+      for (const item of list) {
+        if (typeof item?.id !== "string") continue
+        const id = item.id
+        const key = id.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        let displayName = typeof item?.name === "string" && item.name.trim().length ? item.name.trim() : `Vault-${id.slice(2, 6).toUpperCase()}`
+        if (displayName === "VaultCraft (Hyper Testnet)") {
+          displayName = `Vault-${id.slice(2, 6).toUpperCase()}`
+        }
+        normalized.push({
+          id,
+          name: displayName,
+          type: item?.type,
+          asset: item?.asset,
+        })
+      }
       setVaults(normalized)
       setVaultsError(null)
       if (!DEFAULT_ASSET_ADDRESS) {
@@ -230,8 +242,22 @@ export default function ManagerPage() {
       setLastDeployed(addr)
       setDeployMsg(`部署成功：${addr}`)
       try {
-        const params = new URLSearchParams({ vault: addr, asset })
+        const params = new URLSearchParams({ vault: addr })
+        if (asset) params.set("asset", asset)
+        params.set("type", isPrivate ? "private" : "public")
+        params.set("name", name || `Vault-${addr.slice(2, 6)}`)
         await fetch(`${BACKEND_URL}/api/v1/register_deployment?${params.toString()}`, { method: "POST" })
+        setVaults((prev) => {
+          const existing = new Map<string, VaultSummary>()
+          const nextEntry: VaultSummary = { id: addr, name, type: isPrivate ? "private" : "public", asset }
+          existing.set(addr.toLowerCase(), { ...nextEntry, tag: "最近部署" })
+          for (const v of prev) {
+            if (!existing.has(v.id.toLowerCase())) {
+              existing.set(v.id.toLowerCase(), v)
+            }
+          }
+          return Array.from(existing.values())
+        })
         void loadVaults()
       } catch {
         // registry failure is non-blocking
@@ -480,11 +506,12 @@ export default function ManagerPage() {
                         ) : (
                           <>
                             {vaultOptions.map((opt) => {
-                              const label = opt.name && !opt.name.startsWith("0x") ? opt.name : shorten(opt.id)
+                              const label = opt.name && opt.name.length ? opt.name : shorten(opt.id)
                               const meta: string[] = []
                               if (opt.tag) meta.push(opt.tag)
+                              meta.push(shorten(opt.id))
                               if (opt.type) meta.push(opt.type)
-                              if (opt.asset) meta.push(shorten(opt.asset))
+                              if (opt.asset) meta.push(`asset ${shorten(opt.asset)}`)
                               return (
                                 <SelectItem key={opt.id} value={opt.id}>
                                   <div className="flex flex-col">
@@ -548,11 +575,12 @@ export default function ManagerPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {vaultOptions.map((opt) => {
-                          const label = opt.name && !opt.name.startsWith("0x") ? opt.name : shorten(opt.id)
+                          const label = opt.name && opt.name.length ? opt.name : shorten(opt.id)
                           const meta: string[] = []
                           if (opt.tag) meta.push(opt.tag)
+                          meta.push(shorten(opt.id))
                           if (opt.type) meta.push(opt.type)
-                          if (opt.asset) meta.push(shorten(opt.asset))
+                          if (opt.asset) meta.push(`asset ${shorten(opt.asset)}`)
                           return (
                             <SelectItem key={opt.id} value={opt.id}>
                               <div className="flex flex-col">

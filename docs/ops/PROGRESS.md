@@ -74,8 +74,9 @@
   > 图例：✅ 已满足验收；🔄 进行中；⏳ 待回归/验证。
 
 - **v1 当前待办 / 风险**
-  - [ ] Listener e2e 验证：listener registry 已 fan-out 至 Vault，仍需在 Hyper Testnet 实测 `source:"ws"`（测试网偶尔无实时 fills，需准备截图与复现说明）。
-  - [ ] Demo 剧本回归：自测“创建 → 申购 → 下单 → Shock → 告警”，确认 Skeleton/空态/提示完整并更新 DEMO_PLAN。
+- [ ] Listener e2e 验证：listener registry 已 fan-out 至 Vault，仍需在 Hyper Testnet 实测 `source:"ws"`（测试网偶尔无实时 fills，需准备截图与复现说明）。
+  - 2025-10-19 再次尝试 ETH 0.02 buy（order=41408472092）仍未收到 `last_ws_event`；事件流仅有 `source:"ack"`，保持 ack fallback 并记录演示话术。
+- [ ] Demo 剧本回归：自测“创建 → 申购 → 下单 → Shock → 告警”，确认 Skeleton/空态/提示完整并更新 DEMO_PLAN。
   - [ ] 空态与提示：Manager/Discover/Portfolio Skeleton、错误提示再打磨，准备 Showcase 截图。
   - [ ] Alert 演示指引：在 DEMO_PLAN 中补充 webhook 演示提示（如何触发 drawdown、冷却/降级说明）。
 

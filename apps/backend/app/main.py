@@ -279,7 +279,7 @@ def api_artifact_mockerc20():
 
 
 @app.post("/api/v1/register_deployment")
-def api_register_deployment(vault: str, asset: str | None = None):
+def api_register_deployment(vault: str, asset: str | None = None, name: str | None = None, type: str | None = None):
     """Record a deployment in deployments/hyper-testnet.json for discovery.
 
     This is a convenience for demo. In production this should be guarded.
@@ -305,18 +305,26 @@ def api_register_deployment(vault: str, asset: str | None = None):
         if isinstance(item, dict) and item.get("vault") == vault:
             if asset:
                 item["asset"] = asset
+            if name:
+                item["name"] = name
+            if type:
+                item["type"] = type
             updated = True
             break
     if not updated:
-        entry = {"vault": vault, "type": "public"}
+        entry = {"vault": vault, "type": type or "public"}
         if asset:
             entry["asset"] = asset
+        if name:
+            entry["name"] = name
         deployments.append(entry)
     meta["deployments"] = deployments
     # retain legacy keys for backward compatibility
     meta["vault"] = vault
     if asset:
         meta["asset"] = asset
+    if name:
+        meta["name"] = name
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(meta, indent=2, ensure_ascii=False))
     return {"ok": True, "path": str(f), "deployments": deployments}

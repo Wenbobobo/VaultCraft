@@ -14,42 +14,29 @@ import { useLocale } from "@/components/locale-provider"
 const fallbackVaults = [
   {
     id: "0x1234...5678",
-    name: "Alpha Momentum Strategy",
+    name: "Demo Momentum Vault",
     type: "public",
-    aum: 4250000,
-    sharpe: 2.34,
-    annualReturn: 24.5,
-    volatility: 12.3,
-    maxDrawdown: -8.2,
+    aum: 2_300_000,
+    sharpe: 2.1,
+    annualReturn: 18.5,
+    volatility: 11.2,
+    maxDrawdown: -6.8,
     performanceFee: 10,
     managerStake: 8.5,
-    isNew: false,
+    isNew: true,
   },
   {
     id: "0x8765...4321",
-    name: "Quant Arbitrage Fund",
+    name: "Demo Market Neutral",
     type: "private",
-    aum: 8900000,
-    sharpe: 3.12,
-    annualReturn: 31.2,
-    volatility: 9.8,
-    maxDrawdown: -5.4,
-    performanceFee: 15,
-    managerStake: 12.0,
+    aum: 1_150_000,
+    sharpe: 3.0,
+    annualReturn: 22.4,
+    volatility: 8.4,
+    maxDrawdown: -4.1,
+    performanceFee: 12,
+    managerStake: 10.0,
     isNew: false,
-  },
-  {
-    id: "0xabcd...efgh",
-    name: "DeFi Yield Optimizer",
-    type: "public",
-    aum: 2100000,
-    sharpe: 1.89,
-    annualReturn: 18.7,
-    volatility: 14.2,
-    maxDrawdown: -11.5,
-    performanceFee: 10,
-    managerStake: 6.2,
-    isNew: true,
   },
 ]
 
@@ -69,19 +56,26 @@ export function VaultDiscovery() {
         if (!alive) return
          setLoadError(null)
         // merge minimal API data into display-friendly mock-like shape with defaults
-        const enriched = v.map((x) => ({
-          id: x.id,
-          name: x.name,
-          type: x.type,
-          aum: x.aum ?? 1_000_000,
-          sharpe: 1.8,
-          annualReturn: 20.0,
-          volatility: 12.0,
-          maxDrawdown: -8.0,
-          performanceFee: 10,
-          managerStake: 10.0,
-          isNew: false,
-        }))
+        const enriched = v.map((x) => {
+          const id = x.id
+          const displayName =
+            typeof x.name === "string" && x.name.trim().length
+              ? x.name.trim()
+              : `Vault-${id?.slice(2, 6)?.toUpperCase()}`
+          return {
+            id,
+            name: displayName,
+            type: x.type,
+            aum: x.aum ?? 1_000_000,
+            sharpe: 1.8,
+            annualReturn: 20.0,
+            volatility: 12.0,
+            maxDrawdown: -8.0,
+            performanceFee: 10,
+            managerStake: 10.0,
+            isNew: false,
+          }
+        })
         setVaults(enriched)
       })
       .catch((err) => {
