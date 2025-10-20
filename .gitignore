@@ -55,4 +55,4 @@ log.txt
 .coverage
 *.tar
 error.txt
-
+*readme.md

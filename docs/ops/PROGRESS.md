@@ -5,6 +5,7 @@
 - 文档
   - PRD v0（../product/PRD.md）；Tech Design（../architecture/TECH_DESIGN.md）；架构解析（../architecture/ARCHITECTURE.md）；前端规范（../architecture/FRONTEND_SPEC.md）；配置清单（CONFIG.md）；Hyper 集成（../architecture/HYPER_INTEGRATION.md）；Hyper 部署（HYPER_DEPLOYMENT.md）
   - v1 里程碑与验收清单：../product/PLAN_V1.md（黑客松演示范围 P0–P3；集中仓位相关移至 v2）
+  - README.md 全量重写（Hyper Testnet 定位、Feature Matrix、Quickstart、Roadmap）；新增 `docs/ops/PITCH_DECK.md` 路演稿
 - 合约（Hardhat + Foundry）
   - Vault（ERC20 shares，最短锁定、HWM 绩效费、私募白名单、适配器白名单、可暂停）
   - Hardhat 测试 + 覆盖率：Vault.sol statements 85.71%，branches 51.16%，functions 77.78%，lines 100%

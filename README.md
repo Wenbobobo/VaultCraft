@@ -1,298 +1,201 @@
-# VaultCraft v0
+# VaultCraft · Hyper 测试网演示栈
 
-可验证的人类交易员金库平台（Public 透明 + Private 不公开持仓）。本仓库包含：
-- 合约（Solidity）：最小金库 `Vault`（ERC20 份额、最短锁定、HWM 绩效费、Public/Private、适配器白名单、可暂停）
-- 测试：Foundry（Solidity 高覆盖）与 Hardhat（JS/TS 生态）
-- 后端（Python/uv）：指标计算与最小 API（年化、波动、Sharpe、最大回撤、恢复期）
-- 文档：PRD 与技术方案（docs/）
-
-演示链：Hyper Testnet（chainId 998，EVM RPC https://rpc.hyperliquid-testnet.xyz/evm）。
+> 面向黑客松的 Hyper Testnet 全流程演示方案：经理部署金库 → 通过 Hyper SDK 执行合约仓位 → 投资者申购 / 赎回 → NAV 曲线与告警联动。  
+> 产品定位是“比 Hyper 多私域流量，比带单更规范安全”的人类交易员金库平台。
 
 ---
 
-## 架构总览
+## 🎯 产品亮点
+
+- **双形态金库**：公募金库保持 Hyper 式透明；私募金库只向白名单披露 NAV/PnL（v2 可插入 WhisperFi）。
+- **受控执行通道**：链上 Router/Adapter + 后端 Exec Service 双重限权，限制标的、杠杆、名义金额，支持 reduce-only 兜底。
+- **一份 `.env` 即可跑通**：钱包连接、状态栏、NAV 曲线、事件流、经理控制台与投资者 Portfolio 集成于单一 Next.js 应用。
+- **可观测性内建**：NAV 快照、事件日志、Webhook 告警（回撤 / 执行失败）、/status API、CLI 辅助排查。
+- **TDD 基线**：Hardhat + Foundry 覆盖合约逻辑（85%+），FastAPI pytest（44 条），Next.js 构建校验。
+
+---
+
+## ✨ 功能矩阵（v1 范围）
+
+| 能力 | 公募金库 | 私募金库 | 说明 |
+| --- | --- | --- | --- |
+| 链上份额会计 | ✅ | ✅ | ERC4626 share、最短锁定、HWM 绩效费、适配器白名单、可暂停 |
+| 信息披露 | 持仓/事件全公开 | NAV/PnL 与 KPI 公示，持仓隐藏 | 私募需要链上 whitelist；邀请码演示走前端 |
+| 执行通道 | Hyper SDK（dry-run ↔ live），失败可 reduce-only | 同 | `ENABLE_LIVE_EXEC` 统一开关 |
+| 风控 | 交易对白名单、杠杆上/下限、名义金额区间、告警黄条 | 同 | `/status` 实时返回参数 |
+| 告警 | 回撤 / 执行失败 → Webhook（电话/短信） | 同 | 冷却策略可配 |
+| Listener | WS listener fan-out，事件 `source:"ws"` | 同 | Testnet 偶有无实时 fill，ack 兜底 |
+
+---
+
+## 🧩 系统架构
 
 ```mermaid
 flowchart LR
-  subgraph Dapp
-    Web[前端/SDK]
+  subgraph Frontend[Next.js 前端]
+    FE[Discover / Vault / Portfolio / Manager]
   end
 
-  subgraph Chain[EVM L2 Testnet]
-    V[Vault 4626 简化]
-    A1[Adapter: Spot DEX]
-    A2[Adapter: Perps (占位)]
-    V -- execute(adapter,data) --> A1
-    V -- execute(adapter,data) --> A2
+  subgraph Backend[FastAPI & Exec Service]
+    API[/REST API\n/status · /nav_series · /events · /metrics\n/pretrade · /exec/*/]
+    PRICE[行情路由\nHyper SDK → REST → 演示价]
+    EXEC[Exec Service\n风控 + SDK driver + Positions store]
+    LISTENER[User WS Listener\n(ack/ws fan-out)]
+    SNAP[Snapshot Daemon]
+    ALERT[Alert Manager]
   end
 
-  subgraph Backend[Backend (FastAPI)]
-    IDX[事件索引/快照]
-    MET[指标计算]
-    API[只读 API]
+  subgraph Chain[EVM (Hyper Testnet)]
+    VAULT[Vault 4626]
+    ROUTER[Router]
+    ADAPTER[Perps Adapter]
   end
 
-  Web <--> API
-  Web --> V
-  IDX --> MET --> API
+  subgraph HyperSDK[Hyperliquid API]
+    SDK[Python SDK]
+    REST[(REST)]
+    WS((User Events WS))
+  end
+
+FE <-->|https://…/api/v1| API
+EXEC --> VAULT
+EXEC --> SDK
+LISTENER ---> WS
+PRICE --> REST
+ALERT -->|Webhook| Phone
 ```
 
 ---
 
-## 用户交互流程
+## 📋 v1 交付状态（P0–P3）
 
-Public（公募，持仓透明）
-```mermaid
-sequenceDiagram
-  participant U as 投资者
-  participant FE as 前端
-  participant V as Vault(公开)
+| 阶段 | 状态 | 说明 |
+| --- | --- | --- |
+| **P0 链上闭环** | ✅ | 份额申赎 / HWM 绩效费 / 私募白名单 / Manager 控制台 / NAV 曲线 |
+| **P1 体验打磨** | ✅ | Manager 标签页 + 高级设置折叠、状态条、Drawdown 告警、Webhook |
+| **P2 Hyper 实单** | ✅ | Hyper SDK dry-run 与小额实单、reduce-only Fallback、风险参数 UI |
+| **P3 演示打磨** | 🔄 | Listener `source:"ws"` 需等待测试网实时 fill；Demo 彩排 & Skeleton 细节进行中 |
 
-  U->>FE: 浏览金库列表 (含AUM/指标)
-  FE->>V: 读取持仓/交易/净值
-  U->>V: 申购(实时净值)
-  Note over V: 份额铸造
-  U->>V: 赎回(解锁后)
-  Note over V: 份额销毁→资金返回
-```
-
-Private（私募，不公开持仓）
-```mermaid
-sequenceDiagram
-  participant U as 投资者(白名单)
-  participant FE as 前端
-  participant V as Vault(私募)
-
-  U->>FE: 浏览金库摘要(不含持仓/交易)
-  U->>FE: 通过白名单/门票加入
-  U->>V: 申购(实时净值)
-  FE->>V: 查看 NAV/PnL 曲线与绩效指标
-  U->>V: 赎回(解锁后)
-```
+> 验收条款详见 `docs/product/PLAN_V1.md`；实时进度与交接说明见 `docs/ops/PROGRESS.md`。
 
 ---
 
-## 路线与取舍
+## ⚙️ 统一环境变量（根目录 `.env`）
 
-- v0 只实现必要特性：最短锁定、HWM 绩效费、公募透明、私募不公开持仓、白名单资产与适配器、可暂停。
-- 计划中：
-  - [ ] 锁定周期费率曲线
-  - [ ] Reduce-Only 模式
-  - [ ] 容量/拥挤/风险函数
-  - [ ] 批量窗口（Batching Window）
-  - [ ] 私有路由与 AA（Gasless）
-  - [ ] 期权与 RWA 适配器
-  - [ ] Manager 质押与削减（Manager Staking & Slashing）
-  - [ ] Manager 持仓上限曲线
+> 仓库仅认可根目录 `.env`，前后端/Hardhat 共用。示例见 `.env.example`。
 
----
-
-## 统一环境变量（根目录 .env）
-
-仅使用仓库根目录 `.env` 进行统一配置（后端/前端/Hardhat 共用）。示例见 `.env.example`。
-
-后端（FastAPI / Exec / 行情）关键参数：
-- HYPER_API_URL=https://api.hyperliquid-testnet.xyz
-- HYPER_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
-- ENABLE_HYPER_SDK=1                      # SDK 优先行情
-- ENABLE_LIVE_EXEC=0                      # 实单开关（1=开启）
-- HYPER_TRADER_PRIVATE_KEY=0x...          # 或 PRIVATE_KEY=0x...
-- EXEC_ALLOWED_SYMBOLS=BTC,ETH            # 允许交易对
-- EXEC_MIN_LEVERAGE=1.0 / EXEC_MAX_LEVERAGE=50.0
-- EXEC_MAX_NOTIONAL_USD=1000000000        # 名义金额上限
-- EXEC_MIN_NOTIONAL_USD=10                # 名义金额下限（Hyper最小下单$10）
-- EXEC_MARKET_SLIPPAGE_BPS=10             # 市价滑点（bps，可按需调高）
-- EXEC_RO_SLIPPAGE_BPS=10                 # Reduce-Only 滑点（空值则继承上项）
-- EXEC_RETRY_ATTEMPTS=0 / EXEC_RETRY_BACKOFF_SEC=1.0
-- ALERT_WEBHOOK_URL=https://fwalert.com/...   # 告警 webhook 地址（留空禁用）
-- ALERT_COOLDOWN_SEC=120               # 同类告警冷却秒数
-- ALERT_NAV_DRAWDOWN_PCT=0.05          # NAV 回撤触发阈值（默认 5%）
-- APPLY_DRY_RUN_TO_POSITIONS=1            # dry-run 是否回写 positions
-- APPLY_LIVE_TO_POSITIONS=1               # live exec 是否回写 positions
-- POSITIONS_FILE=deployments/positions.json
-- ENABLE_SNAPSHOT_DAEMON=0 / SNAPSHOT_INTERVAL_SEC=15
-- EVENT_LOG_FILE=logs/events.jsonl        # 可选，事件追加写
-
-前端（Next.js）关键参数：
-- NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000
-- NEXT_PUBLIC_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
-- NEXT_PUBLIC_ENABLE_DEMO_TRADING=0       # 演示下单面板开关
-- NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS=0x... # （可选）默认资产地址（建议填 USDC 测试网地址）
-  (钱包按钮默认显示，无需额外开关)
-
-Hardhat（部署/脚本）关键参数：
-- HYPER_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
-- PRIVATE_KEY=0x...                       # 测试网私钥（小额）
-
-## 快速开始（Backend）
-
-推荐配置：Python 3.10+ & uv
-
-```
-cd apps/backend
-uv venv
-uv pip install -q pytest pytest-cov
-uv run pytest -q
-uv run uvicorn app.main:app --reload
-```
-
-如遇 `pytest` 未找到，请先执行 `uv pip install -q pytest` 再 `uv run pytest -q`。
+| 分类 | 关键变量 | 说明 |
+| --- | --- | --- |
+| 执行与行情 | `HYPER_API_URL` / `HYPER_RPC_URL` / `ENABLE_HYPER_SDK` / `ENABLE_LIVE_EXEC` / `HYPER_TRADER_PRIVATE_KEY` (或 `PRIVATE_KEY`) / `EXEC_ALLOWED_SYMBOLS` / `EXEC_MIN/MAX_LEVERAGE` / `EXEC_MIN/MAX_NOTIONAL_USD` / `EXEC_MARKET_SLIPPAGE_BPS` / `EXEC_RO_SLIPPAGE_BPS` / `EXEC_RETRY_*` / `APPLY_*_TO_POSITIONS` | Hyper 测试网最小下单约 $10，建议 `EXEC_MIN_NOTIONAL_USD=10` |
+| Listener & Snapshot | `ENABLE_USER_WS_LISTENER` / `ADDRESS` / `ENABLE_SNAPSHOT_DAEMON` / `SNAPSHOT_INTERVAL_SEC` | Listener 需开启 live exec 且使用有余额私钥 |
+| 告警 | `ALERT_WEBHOOK_URL` / `ALERT_COOLDOWN_SEC` / `ALERT_NAV_DRAWDOWN_PCT` | 可直接使用 fwalert 链路 |
+| 前端 | `NEXT_PUBLIC_BACKEND_URL` / `NEXT_PUBLIC_RPC_URL` / `NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS` / `NEXT_PUBLIC_ENABLE_DEMO_TRADING` | 默认显示钱包按钮；填入 Hyper USDC 可跳过 MockERC20 流程 |
+| 持久化 | `POSITIONS_FILE` / `EVENT_LOG_FILE` | 默认 `deployments/positions.json` / `logs/events.jsonl` |
 
 ---
 
-## 快速开始（Hardhat）
+## 🚀 快速启动步骤
 
-要求：Node 18+（已内置）
+> 前置依赖：Node 18+、pnpm 8+、Python 3.11+、[uv](https://github.com/astral-sh/uv)、Hardhat 工具链、已充值的 Hyper Testnet 钱包（gas + USDC）。
 
-```
-cd hardhat
-npm install
-npx hardhat compile
-npx hardhat test
-```
-
-部署到测试网（示例）
-```
-# 设置环境变量（示例，请替换）
-$env:RPC_URL="https://sepolia.base.org"
-$env:PRIVATE_KEY="0x..."  # 部署私钥，务必小额测试
-
-# 创建简单部署脚本（scripts/deploy.ts），或使用 hardhat task
-# 示例 task（伪代码）：
-# const Vault = await ethers.getContractFactory("Vault")
-# const vault = await Vault.deploy(asset, name, symbol, admin, manager, guardian, isPrivate, pBps, lockDays)
-```
-
-说明：Hardhat 项仅用于 JS/TS 生态的编译与最小测试；Solidity 侧高覆盖测试仍由 Foundry 提供（见下）。
-
----
-
-## 常用 Hardhat 任务（部署/演示）
-
-```
-# 创建私募金库（可指定资产/经理/守护者/白名单/费率/锁期）
-npx hardhat vault:create-private --network baseSepolia \
-  --perf 1000 --lock 1 --whitelist 0xInvestor
-
-# 给 MockERC20 铸币
-npx hardhat token:mint --network baseSepolia \
-  --token 0xMockToken --to 0xYourAddr --amount 1000
-
-# 存入金库
-npx hardhat vault:deposit --network baseSepolia \
-  --vault 0xVault --asset 0xToken --amount 100
-
-# 配置白名单/适配器/锁期/绩效费
-npx hardhat vault:whitelist --network baseSepolia --vault 0xVault --user 0xU --allowed true
-npx hardhat vault:set-adapter --network baseSepolia --vault 0xVault --adapter 0xA --allowed true
-npx hardhat vault:set-lock --network baseSepolia --vault 0xVault --days 1
-npx hardhat vault:set-perf-fee --network baseSepolia --vault 0xVault --bps 1000
-```
+1. 安装依赖  
+   ```powershell
+   pnpm install --recursive
+   cd apps/backend
+   uv venv
+   uv sync
+   ```
+2. 启动后端  
+   ```powershell
+    cd apps/backend
+    uv run pytest -q
+    uv run uvicorn app.main:app --reload --port 8000
+   ```
+3. 启动前端  
+   ```powershell
+   cd apps/vaultcraft-frontend
+   pnpm dev   # http://localhost:3000
+   ```
+4. 合约校验  
+   ```powershell
+   cd hardhat
+   npm install
+   npx hardhat test
+   # 可选：npm run deploy:hyperTestnet
+   ```
+5. CLI 辅助（可选）  
+   ```powershell
+   cd apps/backend
+   uv run python -m app.cli exec-open <vault> ETH 0.01 buy --leverage 2
+   uv run python -m app.cli exec-close <vault> ETH --size 0.01
+   ```
 
 ---
 
-## 快速开始（Web 前端）
+## 🧭 演示脚本（GUI 优先）
 
-```
-cd apps/vaultcraft-frontend
-pnpm i
-pnpm dev
-# 打开 http://localhost:3000 查看列表与详情；Transactions 标签查看事件流
-```
+1. **连接钱包**：右上角按钮一键添加/切换至 Hyper Testnet（chainId 998），状态栏显示网络信息。  
+2. **Manager Launch Checklist**：在 `/manager` 页面检查资产元数据、经理余额、风险参数。  
+3. **部署金库**：填入 Hyper USDC、名称、代号，点击部署；成功后自动登记到 Listener。  
+4. **金库管理**：下拉选择最新部署的金库，可调整白名单、锁期、绩效费、Guardian 等高级设置。  
+5. **仓位执行**：`仓位执行` 标签页先进行 `/pretrade` 风控校验，再触发 `/exec/open|close`；展示最小名义金额、杠杆超限、Reduce-only fallback 等提示。  
+6. **投资者视角**：在 `/browse` 发现金库，`/vault/{id}` 查看 KPI / NAV / Events / Holdings，`/portfolio` 查看份额、锁定期与简易 PnL。  
+7. **Shock 与告警**：点击 “Simulate -10% Shock” 模拟 NAV 下挫，引发黄色告警条与 webhook 电话。  
+8. **Listener 状态**：状态栏显示 Listener/Snapshot 状态；事件流中 `source: ack | ws` 徽章区分来源（测试网若暂无实时 fill，请提示评委 ack 已兜底）。  
 
-前端已对接后端 API（metrics/nav/events）与可选链上只读；无需单独前端 .env.local，变量来自根 .env。
-
----
-
-## 快速开始（Foundry，可选）
-
-Foundry 优点：
-- Solidity 原生测试（速度快、覆盖率高、不变量/模糊更便利）
-- 适合合约会计、事件与边界条件的细粒度测试
-
-安装 Foundry（建议 WSL 或参照官方文档），然后：
-```
-cd contracts
-forge build
-forge test -vvv
-# 覆盖率
-forge coverage --report lcov
-```
+完整演示稿：`docs/ops/DEMO_PLAN.md`。
 
 ---
 
-## 测试覆盖要点
+## 🧪 测试与质量保障
 
-Solidity（Foundry）：
-- 申购/赎回保持单位净值 PS 不变
-- HWM 绩效费（铸份额）仅在 PS > HWM 时计提
-- 私募白名单门控（非白名单拒绝）
-- 最短锁定生效（解锁前赎回失败）
-- 暂停/恢复阻断交互
-- 仅经理可执行适配器；适配器需白名单
-- 第三方赎回（allowance）
-- 管理员参数变更与上限
-- 快照事件与白名单事件发射
+| 层级 | 命令 | 覆盖重点 |
+| --- | --- | --- |
+| 合约（Hardhat） | `npx hardhat test` | 6 条用例覆盖申赎、绩效费、白名单、暂停、适配器、shares |
+| 合约（Foundry，可选） | `forge test -vvv` | 不变量/模糊测试（见 `contracts/test/`） |
+| 后端 | `uv run pytest -q` | 44 条：指标、风控、重试、快照、listener、告警、CLI |
+| 前端 | `pnpm run build` | 确保 Next.js 打包通过，`pnpm run lint` 可做增量校验 |
 
-后端（pytest）：
-- 指标计算：年化/波动/Sharpe/最大回撤与恢复期
+开发规范：新增功能需同步单测，更新相关文档与 demo 脚本；提交前必须本地跑通上述命令。
 
 ---
 
-## 项目结构
+## 🔔 告警与可观测性
 
-```
-contracts/               # Solidity 源码与 Foundry 测试
-  Vault.sol
-  test/
-    Vault.t.sol
-    mocks/
-    utils/
-
-hardhat/                 # Hardhat 项（JS/TS 生态）
-  contracts/             # 复制的最小合约以便编译
-  test/
-
-apps/backend/            # FastAPI + 指标
-  app/
-  tests/
-
-docs/                    # PRD 与技术方案
-```
+- `ALERT_NAV_DRAWDOWN_PCT` + `ALERT_COOLDOWN_SEC` 避免重复呼叫。  
+- `EVENT_LOG_FILE` 追加 NDJSON，便于审计与截图。  
+- `/api/v1/status` 暴露执行模式、listener/snapshot 状态、最近一次 WS 时间戳。  
+- `/api/v1/events/:vault?types=exec_open,fill` 用于前端事件流，支持 filters + auto scroll。  
 
 ---
 
-## 研发流程（TDD）
+## 📚 文档索引
 
-- 优先在 Foundry 编写/运行合约单测与性质测试；
-- 若需 JS/TS 生态/前端联调，使用 Hardhat（不替代 Foundry 测试）；
-- 后端以 pytest 驱动指标/索引逻辑；
-- 功能合入前要求：测试通过 + 关键不变量/事件覆盖。
-
----
-
-## 适配 Perps（占位）
-
-- v0 合约已提供 `execute(adapter,data)` 与适配器白名单；
-- 首选接 Synthetix Perps，后续可扩 Hyper/GMX/Vertex/Aevo；
-- 测试网准备：RPC、测试代币、perps 市场/保证金资产；
-- 若短期无可用市场，先以 MockAdapter 演示调用链路。
+| 场景 | 文件 |
+| --- | --- |
+| 产品 / 评委 | `docs/product/PRD.md`, `docs/product/PLAN_V1.md` |
+| 架构 / 开发 | `docs/architecture/ARCHITECTURE.md`, `docs/architecture/TECH_DESIGN.md`, `docs/architecture/FRONTEND_SPEC.md`, `docs/architecture/HYPER_INTEGRATION.md` |
+| 运营 / 部署 | `docs/ops/DEPLOYMENT.md`, `docs/ops/HYPER_DEPLOYMENT.md`, `docs/ops/CONFIG.md`, `docs/ops/DEMO_PLAN.md`, `docs/ops/PROGRESS.md`, `docs/ops/ISSUES.md`, `docs/ops/PITCH_DECK.md` |
+| 调研 / 历史 | `docs/research/PERPS_RESEARCH.md`, `docs/research/Perps 适配器及交易品种调研报告.pdf`, `docs/archive/*` |
 
 ---
 
-## 迁移 HyperEVM（预留）
+## 🗺 Roadmap 概览
 
-- Router/Adapter 解耦；
-- 事件/快照格式稳定，便于在新链重放对账；
-- Private 视图门控与签名门票逻辑与链无关，可复用。
+- **v1 打磨（P3）**  
+  - 等待 Hyper Testnet 实时 fill，捕获 `source:"ws"` 事件并更新 demo 资料。  
+  - 全量彩排 & Skeleton/空态补充。  
+  - 对齐 README / DECK / DEMO_PLAN。  
+
+- **v2 方向**  
+  - 手续费率曲线（默认无锁期，按持有时长收费）。  
+  - 多市场适配器：Polymarket、美股、贵金属、期权。  
+  - WhisperFi 集成：私募交易隐私、对账证明。  
+  - Vault Composer：金库组合/策略拼装。  
+  - 指标与多语言 UX（含中文界面、Merke 承诺等）。  
+
+欢迎贡献：请遵循现有 TDD 流程，先阅读 `docs/ops/PROGRESS.md` 获取上下文后再开展开发工作。
 
 ---
 
-## 参考文档
-
-- 产品文档：docs/PRD.md（v0 范围、参数与治理矩阵、Backlog）
-- 技术方案：docs/TECH_DESIGN.md（架构、接口、事件、不变量、TDD 计划）
- - 架构解析：docs/ARCHITECTURE.md（前端/后端/链上职责与数据流）
- - 前端规范：docs/FRONTEND_SPEC.md（页面/组件/接口契约/样式/交互）
- - Hyper 集成：docs/HYPER_INTEGRATION.md（v1 执行/行情集成方案）
- - 配置清单：docs/CONFIG.md（env、deployments 记录与建议）
+预祝黑客松演示顺利，We got this! 🚀
