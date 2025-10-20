@@ -13,6 +13,7 @@
 - 启动：后台 `uvicorn app.main:app --reload --port 8000`；前台 `pnpm dev`（apps/vaultcraft-frontend）
 - 检查：前端页头 StatusBar（或 `/api/v1/status`）显示 Mode、SDK、Listener、Snapshot、chainId/block
  - 钱包按钮：默认可见。如需临时隐藏，可自行注释前端按钮。
+- Listener Registry：首次执行前，可先在 /manager 执行一次小额开仓（或运行 `uv run python demo_exec.py`）登记 Vault；WS listener 会将 fills fan-out 到登记 Vault 并标记 `source:"ws"`。若测试网暂未推送实时填单，保留截图/说明（事件仍有 `source:"ack"` 回写）。 
 
 （CLI 仅作为排障备用，不进入评审脚本）
 

@@ -11,6 +11,7 @@ from .navcalc import snapshot_now
 from .price_provider import PriceRouter
 import json
 import time
+from .listener_registry import register as register_listener_vault
 try:  # pragma: no cover - optional dependency for tests
     from hyperliquid.exchange import Exchange  # type: ignore
 except Exception:  # pragma: no cover
@@ -186,6 +187,7 @@ class ExecService:
         except Exception as e:
             event_store.add(vault, {"type": "exec_open", "status": "rejected", "error": str(e)})
             return {"ok": False, "error": str(e)}
+        register_listener_vault(vault)
         payload = HyperExecClient().build_open_order(order)
         if not Settings().ENABLE_LIVE_EXEC:
             event_store.add(vault, {"type": "exec_open", "status": "dry_run", "payload": payload})
@@ -210,6 +212,7 @@ class ExecService:
             return {"ok": False, "error": str(e)}
 
     def close(self, vault: str, symbol: str, size: float | None = None) -> Dict[str, Any]:
+        register_listener_vault(vault)
         payload = HyperExecClient().build_close_order(symbol=symbol, size=size)
         if not Settings().ENABLE_LIVE_EXEC:
             event_store.add(vault, {"type": "exec_close", "status": "dry_run", "payload": payload})

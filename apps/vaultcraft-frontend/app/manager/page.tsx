@@ -136,7 +136,7 @@ export default function ManagerPage() {
   const loadVaults = useCallback(async () => {
     setVaultsLoading(true)
     try {
-      const res = await fetch(${BACKEND_URL}/api/v1/vaults)
+      const res = await fetch(`${BACKEND_URL}/api/v1/vaults`)
       const body = await res.json().catch(() => ({}))
       const list = Array.isArray(body?.vaults) ? body.vaults : []
       const normalized: VaultSummary[] = list
@@ -204,7 +204,7 @@ export default function ManagerPage() {
       await ensureHyperChain?.()
       if (!isHyper) throw new Error("请切换到 Hyper Testnet (chain 998)")
       if (!ethers.isAddress(asset)) throw new Error("请输入合法的资产地址（例如 Hyper Testnet USDC）")
-      const res = await fetch(${BACKEND_URL}/api/v1/artifacts/vault, { headers: { Accept: "application/json" } })
+      const res = await fetch(`${BACKEND_URL}/api/v1/artifacts/vault`, { headers: { Accept: "application/json" } })
       let artifact: any = null
       try {
         artifact = await res.json()
@@ -212,12 +212,11 @@ export default function ManagerPage() {
         artifact = null
       }
       if (!res.ok) {
-        const statusMsg = artifact?.error || Artifact fetch failed (status )
+        const statusMsg = artifact?.error || `Artifact fetch failed (status ${res.status})`
         throw new Error(statusMsg)
       }
       if (!artifact?.bytecode || !artifact?.abi) {
-        throw new Error(artifact?.error || "Artifact not available. Run 
-px hardhat compile then restart backend.")
+        throw new Error(artifact?.error || "Artifact not available. Run `npx hardhat compile` then restart backend.")
       }
       const provider = new ethers.BrowserProvider((window as any).ethereum)
       const signer = await provider.getSigner()
@@ -225,13 +224,14 @@ px hardhat compile then restart backend.")
       const args = [asset, name, symbol, admin, admin, admin, isPrivate, BigInt(pBps), BigInt(lockDays)]
       const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, signer)
       const tx = await factory.deploy(...args)
-      setDeployMsg(部署进行中... )
+      setDeployMsg("部署进行中…")
       const deployed = await tx.waitForDeployment()
       const addr = await deployed.getAddress()
       setLastDeployed(addr)
-      setDeployMsg(部署成功：)
+      setDeployMsg(`部署成功：${addr}`)
       try {
-        await fetch(${BACKEND_URL}/api/v1/register_deployment?vault=&asset=, { method: "POST" })
+        const params = new URLSearchParams({ vault: addr, asset })
+        await fetch(`${BACKEND_URL}/api/v1/register_deployment?${params.toString()}`, { method: "POST" })
         void loadVaults()
       } catch {
         // registry failure is non-blocking
@@ -259,9 +259,9 @@ px hardhat compile then restart backend.")
       const contract = new ethers.Contract(vaultAddr, MGMT_ABI, signer)
       // @ts-ignore dynamic call
       const tx = await contract[fn](...params)
-      setMgmtMsg(${fn} ... )
-      await tx.wait()
-      setMgmtMsg(${fn} confirmed: )
+      setMgmtMsg(`${fn} 提交中…`)
+      const receipt = await tx.wait()
+      setMgmtMsg(`${fn} confirmed: ${receipt?.transactionHash ?? tx.hash}`)
     } catch (err: any) {
       setMgmtMsg(err?.shortMessage || err?.message || String(err))
     }
@@ -310,7 +310,7 @@ px hardhat compile then restart backend.")
     setDevMsg(null)
     try {
       await connect()
-      const res = await fetch(${BACKEND_URL}/api/v1/artifacts/mockerc20, { headers: { Accept: "application/json" } })
+      const res = await fetch(`${BACKEND_URL}/api/v1/artifacts/mockerc20`, { headers: { Accept: "application/json" } })
       let artifact: any = null
       try {
         artifact = await res.json()
@@ -318,25 +318,24 @@ px hardhat compile then restart backend.")
         artifact = null
       }
       if (!res.ok) {
-        throw new Error(artifact?.error || MockERC20 artifact fetch failed (status ))
+        throw new Error(artifact?.error || `MockERC20 artifact fetch failed (status ${res.status})`)
       }
       if (!artifact?.bytecode || !artifact?.abi) {
-        throw new Error(artifact?.error || "MockERC20 artifact not available. Run 
-px hardhat compile then restart backend.")
+        throw new Error(artifact?.error || "MockERC20 artifact not available. Run `npx hardhat compile` then restart backend.")
       }
       const provider = new ethers.BrowserProvider((window as any).ethereum)
       const signer = await provider.getSigner()
       const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, signer)
       const tx = await factory.deploy("USD Stable", "USDS")
-      setDevMsg(部署 MockERC20 ... )
+      setDevMsg("部署 MockERC20 中…")
       const deployed = await tx.waitForDeployment()
       const addressMock = await deployed.getAddress()
       const contract = new ethers.Contract(addressMock, artifact.abi, signer)
       const mintTx = await contract.mint(await signer.getAddress(), ethers.parseEther("1000000"))
-      setDevMsg(Mint... )
+      setDevMsg("正在向经理地址铸造测试余额…")
       await mintTx.wait()
       setAsset(addressMock)
-      setDevMsg(MockERC20 已部署并发放余额：)
+      setDevMsg(`MockERC20 已部署并发放余额：${addressMock}`)
       void loadVaults()
     } catch (err: any) {
       const raw = err?.shortMessage || err?.message || String(err)

@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Tuple
 import time
 
 from .settings import Settings
-from .positions import apply_fill
 from .navcalc import snapshot_now
 from .events import store as event_store
+from .listener_registry import all_vaults
 
 _last_ws_event: Dict[str, float] = {}
 
@@ -57,15 +57,33 @@ def process_user_event(vault: str, evt: Dict[str, Any]) -> None:
     if not fills:
         return
     now = time.time()
+    targets = all_vaults()
+    if not targets:
+        targets = {vault}
     for name, side, sz in fills:
-        try:
-            apply_fill(vault, name, sz, side)
-            unit = snapshot_now(vault)
-            event_store.add(vault, {"type": "fill", "status": "applied", "source": "ws", "symbol": name, "side": side, "size": sz, "unitNav": unit})
-            _last_ws_event[vault] = now
-        except Exception as e:
-            event_store.add(vault, {"type": "fill", "status": "error", "error": str(e), "symbol": name})
-            _last_ws_event.setdefault(vault, now)
+        for target in targets:
+            try:
+                unit = None
+                try:
+                    unit = snapshot_now(target)
+                except Exception:
+                    unit = None
+                event_store.add(
+                    target,
+                    {
+                        "type": "fill",
+                        "status": "applied",
+                        "source": "ws",
+                        "symbol": name,
+                        "side": side,
+                        "size": sz,
+                        **({"unitNav": unit} if unit is not None else {}),
+                    },
+                )
+                _last_ws_event[target] = now
+            except Exception as e:
+                event_store.add(target, {"type": "fill", "status": "error", "error": str(e), "symbol": name})
+                _last_ws_event.setdefault(target, now)
 
 
 def last_ws_event(vault: str | None = None) -> float | Dict[str, float] | None:

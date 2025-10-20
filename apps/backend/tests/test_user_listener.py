@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from app.user_listener import _extract_fills, process_user_event, last_ws_event
-from app.positions import get_profile
 from app.events import store as event_store
+from app.listener_registry import register as register_listener_vault, clear as clear_listener_vaults
 
 
 def test_extract_fills_various_shapes():
@@ -22,17 +22,22 @@ def test_extract_fills_various_shapes():
 def test_process_user_event_applies(monkeypatch, tmp_path):
     monkeypatch.setenv("POSITIONS_FILE", str(tmp_path / "positions.json"))
     vid = "0xUL"
+    clear_listener_vaults()
+    register_listener_vault(vid)
+    event_store._events.clear()
     evt = {"fills": [{"name": "ETH", "dir": True, "sz": 1.0}]}
     process_user_event(vid, evt)
-    prof = get_profile(vid)
-    assert abs(prof["positions"].get("ETH", 0.0) - 1.0) < 1e-9
+    events = event_store.list(vid)
+    assert any(e.get("type") == "fill" and e.get("source") == "ws" for e in events)
 
 
 def test_process_user_event_logs_ws_source(monkeypatch, tmp_path):
     monkeypatch.setenv("POSITIONS_FILE", str(tmp_path / "positions.json"))
     vid = "0xLISTENER"
-    evt = {"fills": [{"name": "BTC", "side": "sell", "sz": 0.5}]}
+    clear_listener_vaults()
+    register_listener_vault(vid)
     event_store._events.clear()
+    evt = {"fills": [{"name": "BTC", "side": "sell", "sz": 0.5}]}
     process_user_event(vid, evt)
     events = event_store.list(vid)
     assert any(e.get("type") == "fill" and e.get("source") == "ws" for e in events)

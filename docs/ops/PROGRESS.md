@@ -16,6 +16,7 @@
   - HyperExec 增强：杠杆区间校验（`min_leverage/max_leverage`）、`build_reduce_only()`
   - CORS 现支持任意 `localhost`/`127.0.0.1` 端口（regex 匹配），解决 `localhost`⇄`127` 混用导致的 `Failed to fetch`；新增 `test_artifact_cors_allows_local_dev` 回归测试
   - Exec Service：最小名义金额校验（默认 $10）、close reduce-only fallback、事件打点（source=ack/ws）；`/api/v1/status` 返回运行态（listener/snapshot running/idle/disabled）；实单滑点默认 10bps（`EXEC_MARKET_SLIPPAGE_BPS` 可调），遇流动性错误按 `EXEC_RETRY_ATTEMPTS`/`EXEC_RETRY_BACKOFF_SEC` 退避重试；已成功验证 0.01 ETH 开仓（测试网平仓需等待对手单，详见 ISSUES.md）。
+  - Listener Registry：`exec_service` 在 open/close 时登记 Vault，WS listener 将 fills fan-out 到所有登记 Vault（source=`ws`），并配合 `snapshot_now` 更新 NAV；新增 `listener_registry` 模块与覆盖单测（`test_user_listener.py`）。
   - 新增 API：GET `/api/v1/markets`、GET `/api/v1/price?symbols=`、GET `/api/v1/vaults`、GET `/api/v1/vaults/:id`
     - `markets` 从 `deployments/hyper-testnet.json` 读取配置对（BTC/ETH 5x 缺省）；`price` 采用 Hyper REST 助手（失败则回退确定性演示价格）
   - 新增价格路由：优先官方 Python SDK（启用需 `ENABLE_HYPER_SDK=1`），失败回落 REST，再回落演示价格
@@ -72,7 +73,7 @@
   > 图例：✅ 已满足验收；🔄 进行中；⏳ 待回归/验证。
 
 - **v1 当前待办 / 风险**
-  - [ ] Listener e2e 验证：在 Hyper Testnet 实测 `source:"ws"` 并将流程写入 DEMO_PLAN（含截图与复现步骤）。
+  - [ ] Listener e2e 验证：listener registry 已 fan-out 至 Vault，仍需在 Hyper Testnet 实测 `source:"ws"`（测试网偶尔无实时 fills，需准备截图与复现说明）。
   - [ ] Demo 剧本回归：自测“创建 → 申购 → 下单 → Shock → 告警”，确认 Skeleton/空态/提示完整并更新 DEMO_PLAN。
   - [ ] 空态与提示：Manager/Discover/Portfolio Skeleton、错误提示再打磨，准备 Showcase 截图。
   - [ ] Alert 演示指引：在 DEMO_PLAN 中补充 webhook 演示提示（如何触发 drawdown、冷却/降级说明）。
