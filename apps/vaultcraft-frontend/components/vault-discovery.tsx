@@ -1,15 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowUpRight, Lock, Eye, TrendingUp, TrendingDown } from "lucide-react"
 import Link from "next/link"
-
-import { useEffect } from "react";
-import { getVaults } from "@/lib/api";
+import { getVaults } from "@/lib/api"
+import { useLocale } from "@/components/locale-provider"
 
 // Mock data (fallback)
 const fallbackVaults = [
@@ -61,6 +60,7 @@ export function VaultDiscovery() {
 
   const [vaults, setVaults] = useState(fallbackVaults)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const { t } = useLocale()
 
   useEffect(() => {
     let alive = true
@@ -114,8 +114,10 @@ export function VaultDiscovery() {
     <section className="py-20">
       <div className="container mx-auto px-4">
         <div className="mb-10">
-          <h2 className="text-3xl font-bold mb-2">Discover Vaults</h2>
-          <p className="text-muted-foreground">Verified trader vaults with transparent performance metrics</p>
+          <h2 className="text-3xl font-bold mb-2">{t("discovery.title", "Discover Vaults")}</h2>
+          <p className="text-muted-foreground">
+            {t("discovery.subtitle", "Verified trader vaults with transparent performance metrics")}
+          </p>
           {loadError && (
             <div className="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
               {loadError}
@@ -126,22 +128,27 @@ export function VaultDiscovery() {
         <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as any)}>
             <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="public">Public</TabsTrigger>
-              <TabsTrigger value="private">Private</TabsTrigger>
+              <TabsTrigger value="all">{t("discovery.filter.all", "All")}</TabsTrigger>
+              <TabsTrigger value="public">{t("discovery.filter.public", "Public")}</TabsTrigger>
+              <TabsTrigger value="private">{t("discovery.filter.private", "Private")}</TabsTrigger>
             </TabsList>
           </Tabs>
 
           <div className="flex items-center gap-2">
-            <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by name or address" className="bg-transparent border rounded px-2 py-1 w-64" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t("discovery.searchPlaceholder", "Search by name or address")}
+              className="bg-transparent border rounded px-2 py-1 w-64"
+            />
             <Button variant={sortBy === "sharpe" ? "secondary" : "ghost"} size="sm" onClick={() => setSortBy("sharpe")}>
-              Sharpe
+              {t("discovery.sort.sharpe", "Sharpe")}
             </Button>
             <Button variant={sortBy === "aum" ? "secondary" : "ghost"} size="sm" onClick={() => setSortBy("aum")}>
-              AUM
+              {t("discovery.sort.aum", "AUM")}
             </Button>
             <Button variant={sortBy === "return" ? "secondary" : "ghost"} size="sm" onClick={() => setSortBy("return")}>
-              Return
+              {t("discovery.sort.return", "Return")}
             </Button>
           </div>
         </div>
@@ -155,35 +162,39 @@ export function VaultDiscovery() {
                     <h3 className="font-semibold">{vault.name}</h3>
                     {vault.isNew && (
                       <Badge variant="secondary" className="text-xs">
-                        New
+                        {t("discovery.card.new", "New")}
                       </Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     {vault.type === "public" ? <Eye className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                    <span className="capitalize">{vault.type}</span>
+                    <span className="capitalize">
+                      {vault.type === "public"
+                        ? t("discovery.filter.public", "Public")
+                        : t("discovery.filter.private", "Private")}
+                    </span>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2.5 mb-5">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">AUM</span>
+                  <span className="text-sm text-muted-foreground">{t("discovery.card.aum", "AUM")}</span>
                   <span className="font-semibold font-mono text-sm">${(vault.aum / 1000000).toFixed(1)}M</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Return</span>
+                  <span className="text-sm text-muted-foreground">{t("discovery.card.return", "Return")}</span>
                   <span className="font-semibold text-success flex items-center gap-1 text-sm">
                     <TrendingUp className="h-3.5 w-3.5" />
                     {vault.annualReturn.toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Sharpe</span>
+                  <span className="text-sm text-muted-foreground">{t("discovery.card.sharpe", "Sharpe")}</span>
                   <span className="font-semibold font-mono text-sm">{vault.sharpe.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Drawdown</span>
+                  <span className="text-sm text-muted-foreground">{t("discovery.card.drawdown", "Drawdown")}</span>
                   <span className="font-semibold text-destructive flex items-center gap-1 text-sm">
                     <TrendingDown className="h-3.5 w-3.5" />
                     {vault.maxDrawdown.toFixed(1)}%
@@ -193,7 +204,7 @@ export function VaultDiscovery() {
 
               <Link href={`/vault/${vault.id}`}>
                 <Button className="w-full gap-2 group-hover:bg-primary/90 transition-smooth" size="sm">
-                  View Details
+                  {t("discovery.card.view", "View Details")}
                   <ArrowUpRight className="h-4 w-4" />
                 </Button>
               </Link>

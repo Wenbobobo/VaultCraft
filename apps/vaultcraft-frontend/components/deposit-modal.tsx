@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useLocale } from "@/components/locale-provider"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -41,6 +42,7 @@ export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: Depo
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const { connected, address, connect, ensureHyperChain, isHyper } = useWallet()
+  const { t } = useLocale()
   const { toast } = useToast()
 
   const estimatedShares = amount ? (Number.parseFloat(amount) / vault.unitNav).toFixed(2) : "0.00"
@@ -73,19 +75,19 @@ export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: Depo
       const allowance: bigint = await erc.allowance(address, vaultId)
       if (allowance < amt) {
         const txa = await erc.approve(vaultId, amt)
-        setMsg(`Approving... ${txa.hash}`)
+        setMsg(`${t("deposit.status.approving", "Approving...")} ${txa.hash}`)
         await txa.wait()
       }
       const tx = await v.deposit(amt, address)
-      setMsg(`Depositing... ${tx.hash}`)
+      setMsg(`${t("deposit.status.submitting", "Depositing...")} ${tx.hash}`)
       await tx.wait()
-      setMsg(`Deposit confirmed: ${tx.hash}`)
-      toast({ title: "Deposit confirmed", description: `Tx ${tx.hash.slice(0, 10)}...` })
+      setMsg(`${t("deposit.toast.success", "Deposit confirmed")}: ${tx.hash}`)
+      toast({ title: t("deposit.toast.success", "Deposit confirmed"), description: `Tx ${tx.hash.slice(0, 10)}...` })
       onOpenChange(false)
     } catch (e: any) {
       const s = e?.shortMessage || e?.message || String(e)
       setErr(s)
-      toast({ title: "Deposit failed", description: s, variant: "destructive" })
+      toast({ title: t("deposit.toast.error", "Deposit failed"), description: s, variant: "destructive" })
     } finally {
       setBusy(false)
     }
@@ -95,15 +97,15 @@ export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: Depo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Deposit to {vault.name}</DialogTitle>
+          <DialogTitle>{t("deposit.modalTitle", "Deposit to")} {vault.name}</DialogTitle>
           <DialogDescription>
-            Enter the amount you wish to deposit. Your shares will be calculated based on the current NAV.
+            {t("deposit.description", "Enter the amount you wish to deposit. Your shares will be calculated based on the current NAV.")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="amount">Deposit Amount (USDC)</Label>
+            <Label htmlFor="amount">{t("deposit.amountLabel", "Deposit Amount (USDC)")}</Label>
             <Input
               id="amount"
               type="number"
@@ -115,11 +117,11 @@ export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: Depo
 
           <div className="rounded-lg bg-muted/50 p-4 space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Current NAV</span>
+              <span className="text-muted-foreground">{t("deposit.currentNav", "Current NAV")}</span>
               <span className="font-mono font-semibold">${vault.unitNav.toFixed(3)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Estimated Shares</span>
+              <span className="text-muted-foreground">{t("deposit.estimatedShares", "Estimated Shares")}</span>
               <span className="font-mono font-semibold">{estimatedShares}</span>
             </div>
           </div>
@@ -127,9 +129,12 @@ export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: Depo
           <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 flex gap-3">
             <AlertCircle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
             <div className="text-sm space-y-1">
-              <p className="font-medium text-warning">Lock Period: {vault.lockDays} day(s)</p>
+              <p className="font-medium text-warning">{t("deposit.lockLabel", "Lock Period:")} {vault.lockDays} day(s)</p>
               <p className="text-muted-foreground">
-                Your deposit will be locked for {vault.lockDays} day(s) before you can withdraw.
+                {t(
+                  "deposit.lockHint",
+                  "Your deposit will be locked for {days} day(s) before you can withdraw."
+                ).replace("{days}", String(vault.lockDays))}
               </p>
             </div>
           </div>
@@ -139,10 +144,10 @@ export function DepositModal({ open, onOpenChange, vault, vaultId, asset }: Depo
         {msg && (<div className="text-xs text-muted-foreground mb-2 break-all">{msg}</div>)}
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1" disabled={busy}>
-            Cancel
+            {t("common.cancel", "Cancel")}
           </Button>
           <Button onClick={() => doDeposit()} className="flex-1" disabled={busy}>
-            {busy ? "Processing..." : "Confirm Deposit"}
+            {busy ? t("common.processing", "Processing...") : t("deposit.cta", "Confirm Deposit")}
           </Button>
         </div>
       </DialogContent>

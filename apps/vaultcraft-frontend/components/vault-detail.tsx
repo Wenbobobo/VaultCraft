@@ -19,6 +19,7 @@ import { useWallet } from "@/hooks/use-wallet"
 import { Input } from "@/components/ui/input"
 import { ethers } from "ethers"
 import { BACKEND_URL } from "@/lib/config"
+import { useLocale } from "@/components/locale-provider"
 
 type UIState = {
   id: string
@@ -66,6 +67,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
   const [risk, setRisk] = useState<{ minLev?: number; maxLev?: number; maxNotional?: number; symbols?: string } | null>(null)
   const { connected } = useWallet()
   const validVault = ethers.isAddress(vaultId)
+  const { t } = useLocale()
 
   useEffect(() => {
     let alive = true
@@ -146,7 +148,9 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
               <h1 className="text-3xl font-bold">{vault.name}</h1>
               <Badge variant="secondary" className="gap-1.5">
                 {vault.type === "public" ? <Eye className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
-                <span className="capitalize">{vault.type}</span>
+                <span className="capitalize">
+                  {vault.type === "public" ? t("discovery.filter.public", "Public") : t("discovery.filter.private", "Private")}
+                </span>
               </Badge>
             </div>
             <p className="text-muted-foreground font-mono text-sm">{vault.id}</p>
@@ -154,22 +158,22 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <Card className="p-4 gradient-card border-border/40">
-              <div className="text-sm text-muted-foreground mb-1">Total AUM</div>
+              <div className="text-sm text-muted-foreground mb-1">{t("vault.metric.aum", "Total AUM")}</div>
               <div className="text-2xl font-bold font-mono">${(((chain.aum ?? vault.aum) as number) / 1_000_000).toFixed(2)}M</div>
             </Card>
             <Card className="p-4 gradient-card border-border/40">
-              <div className="text-sm text-muted-foreground mb-1">Unit NAV</div>
+              <div className="text-sm text-muted-foreground mb-1">{t("vault.metric.nav", "Unit NAV")}</div>
               <div className="text-2xl font-bold font-mono">${(chain.unitNav ?? vault.unitNav).toFixed(3)}</div>
             </Card>
             <Card className="p-4 gradient-card border-border/40">
-              <div className="text-sm text-muted-foreground mb-1">Annual Return</div>
+              <div className="text-sm text-muted-foreground mb-1">{t("vault.metric.return", "Annual Return")}</div>
               <div className="text-2xl font-bold text-success flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
                 {vault.annualReturn.toFixed(1)}%
               </div>
             </Card>
             <Card className="p-4 gradient-card border-border/40">
-              <div className="text-sm text-muted-foreground mb-1">Sharpe Ratio</div>
+              <div className="text-sm text-muted-foreground mb-1">{t("vault.metric.sharpe", "Sharpe Ratio")}</div>
               <div className="text-2xl font-bold font-mono">{vault.sharpe.toFixed(2)}</div>
             </Card>
           </div>
@@ -177,19 +181,28 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
           <div className="flex flex-col sm:flex-row gap-3">
             <Button size="lg" className="gap-2" onClick={() => setShowDeposit(true)} disabled={!validVault}>
               <Wallet className="h-4 w-4" />
-              Deposit
+              {t("vault.actions.deposit", "Deposit")}
             </Button>
-            <Button size="lg" variant="outline" className="gap-2 bg-transparent" onClick={() => setShowWithdraw(true)} disabled={!validVault}>
-              Withdraw
+            <Button
+              size="lg"
+              variant="outline"
+              className="gap-2 bg-transparent"
+              onClick={() => setShowWithdraw(true)}
+              disabled={!validVault}
+            >
+              {t("vault.actions.withdraw", "Withdraw")}
             </Button>
             <Button size="lg" variant="ghost" className="gap-2">
-              View on Explorer
+              {t("vault.actions.explorer", "View on Explorer")}
               <ArrowUpRight className="h-4 w-4" />
             </Button>
           </div>
           {!validVault && (
             <p className="text-xs text-muted-foreground mt-2">
-              Demo vault addresses use placeholders. Deploy or register a real vault (see Manager console) to enable deposit / withdraw actions.
+              {t(
+                "vault.placeholder.disabled",
+                "Demo vault addresses use placeholders. Deploy or register a real vault (see Manager console) to enable deposit / withdraw actions."
+              )}
             </p>
           )}
         </div>
@@ -198,15 +211,15 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
       <section className="py-12">
         <div className="container mx-auto px-4">
           <Tabs defaultValue="performance" className="w-full">
-          <TabsList className="mb-8">
-            <TabsTrigger value="performance">Performance</TabsTrigger>
-            <TabsTrigger value="holdings">Holdings</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="info">Info</TabsTrigger>
-            {process.env.NEXT_PUBLIC_ENABLE_DEMO_TRADING === '1' && (
-              <TabsTrigger value="exec">Exec</TabsTrigger>
-            )}
-          </TabsList>
+            <TabsList className="mb-8">
+              <TabsTrigger value="performance">{t("vault.tabs.overview", "Overview")}</TabsTrigger>
+              <TabsTrigger value="holdings">{t("vault.tabs.holdings", "Holdings")}</TabsTrigger>
+              <TabsTrigger value="transactions">{t("vault.tabs.transactions", "Transactions")}</TabsTrigger>
+              <TabsTrigger value="info">{t("vault.tabs.info", "Info")}</TabsTrigger>
+              {process.env.NEXT_PUBLIC_ENABLE_DEMO_TRADING === "1" && (
+                <TabsTrigger value="exec">{t("vault.actions.exec", "Exec")}</TabsTrigger>
+              )}
+            </TabsList>
 
             <TabsContent value="performance" className="space-y-6">
               <Card className="p-6 gradient-card border-border/40">
@@ -223,25 +236,29 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
                     fetch(`${BACKEND_URL}/api/v1/nav/snapshot/${vaultId}?nav=${shock}`, { method: 'POST' })
                       .then(() => nav.refresh())
                       .catch(() => {})
-                  }}>Simulate -10% Shock</Button>
-                  <span className="text-xs text-muted-foreground">Use to demonstrate alerting/drawdown handling</span>
+                  }}>
+                    {t("vault.actions.shock", "Simulate -10% Shock")}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {t("vault.actions.shockHint", "Use to demonstrate alerting/drawdown handling")}
+                  </span>
                 </div>
               </Card>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <Card className="p-4 gradient-card border-border/40">
-                  <div className="text-sm text-muted-foreground mb-2">Annual Volatility</div>
+                  <div className="text-sm text-muted-foreground mb-2">{t("vault.metric.volatility", "Annual Volatility")}</div>
                   <div className="text-xl font-bold font-mono">{vault.volatility.toFixed(1)}%</div>
                 </Card>
                 <Card className="p-4 gradient-card border-border/40">
-                  <div className="text-sm text-muted-foreground mb-2">Max Drawdown</div>
+                  <div className="text-sm text-muted-foreground mb-2">{t("vault.metric.mdd", "Max Drawdown")}</div>
                   <div className="text-xl font-bold text-destructive flex items-center gap-2">
                     <TrendingDown className="h-4 w-4" />
                     {vault.maxDrawdown.toFixed(1)}%
                   </div>
                 </Card>
                 <Card className="p-4 gradient-card border-border/40">
-                  <div className="text-sm text-muted-foreground mb-2">Recovery Period</div>
+                  <div className="text-sm text-muted-foreground mb-2">{t("vault.metric.recovery", "Recovery Period")}</div>
                   <div className="text-xl font-bold font-mono">{vault.recoveryDays} days</div>
                 </Card>
               </div>
@@ -250,16 +267,16 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
             <TabsContent value="holdings">
                 {vault.type === "public" ? (
                 <Card className="p-6 gradient-card border-border/40">
-                  <h3 className="text-lg font-semibold mb-4">Current Holdings</h3>
-                  <p className="text-muted-foreground mb-4">Public vaults display holdings and history (derived from events).</p>
+                  <h3 className="text-lg font-semibold mb-4">{t("vault.holdings.title", "Current Holdings")}</h3>
+                  <p className="text-muted-foreground mb-4">{t("vault.holdings.public", "Public vaults display holdings and history (derived from events).")}</p>
                   <PositionsHistory vaultId={vaultId} />
                 </Card>
               ) : (
                 <Card className="p-6 gradient-card border-border/40 text-center">
                   <Lock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Private Vault</h3>
+                  <h3 className="text-lg font-semibold mb-2">{t("vault.private.title", "Private Vault")}</h3>
                   <p className="text-muted-foreground">
-                    Holdings are not disclosed for private vaults. Only NAV and performance metrics are visible.
+                    {t("vault.private.placeholder", "Holdings are not disclosed for private vaults. Only NAV and performance metrics are visible.")}
                   </p>
                 </Card>
               )}
@@ -267,50 +284,50 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
 
             <TabsContent value="transactions">
               <Card className="p-6 gradient-card border-border/40">
-                <h3 className="text-lg font-semibold mb-4">Recent Events</h3>
+                <h3 className="text-lg font-semibold mb-4">{t("vault.events.title", "Recent Events")}</h3>
                 <EventsFeed vaultId={vaultId} />
               </Card>
             </TabsContent>
 
             <TabsContent value="info">
               <Card className="p-6 gradient-card border-border/40">
-                <h3 className="text-lg font-semibold mb-6">Vault Information</h3>
+                <h3 className="text-lg font-semibold mb-6">{t("vault.info.title", "Vault Information")}</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between py-3 border-b border-border/40">
-                    <span className="text-muted-foreground">Performance Fee</span>
+                    <span className="text-muted-foreground">{t("vault.info.performanceFee", "Performance Fee")}</span>
                     <span className="font-semibold">{vault.performanceFee}%</span>
                   </div>
                   <div className="flex items-center justify-between py-3 border-b border-border/40">
-                    <span className="text-muted-foreground">Management Fee</span>
+                    <span className="text-muted-foreground">{t("vault.info.managementFee", "Management Fee")}</span>
                     <span className="font-semibold">{vault.managementFee}%</span>
                   </div>
                   <div className="flex items-center justify-between py-3 border-b border-border/40">
-                    <span className="text-muted-foreground">Minimum Lock Period</span>
+                    <span className="text-muted-foreground">{t("vault.info.lock", "Minimum Lock Period")}</span>
                     <span className="font-semibold">{(chain.lockDays ?? vault.lockDays)} day(s)</span>
                   </div>
                   <div className="flex items-center justify-between py-3 border-b border-border/40">
-                    <span className="text-muted-foreground">Manager Stake</span>
+                    <span className="text-muted-foreground">{t("vault.info.managerStake", "Manager Stake")}</span>
                     <span className="font-semibold">{vault.managerStake.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between py-3">
-                    <span className="text-muted-foreground">Total Shares</span>
+                    <span className="text-muted-foreground">{t("vault.info.totalShares", "Total Shares")}</span>
                     <span className="font-semibold font-mono">{(chain.totalSupply ?? vault.totalShares).toLocaleString()}</span>
                   </div>
                   {risk && (
                     <>
                       <div className="pt-4 border-t border-border/40" />
-                      <div className="text-sm font-semibold">Risk Controls (Exec Service)</div>
+                      <div className="text-sm font-semibold">{t("vault.status.risk", "Risk Controls (Exec Service)")}</div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">Allowed Symbols</span><span className="font-mono">{risk.symbols}</span></div>
-                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">Leverage Range</span><span className="font-mono">{risk.minLev} - {risk.maxLev}x</span></div>
-                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">Max Notional</span><span className="font-mono">${risk.maxNotional?.toLocaleString()}</span></div>
+                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">{t("vault.status.symbols", "Allowed Symbols")}</span><span className="font-mono">{risk.symbols}</span></div>
+                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">{t("vault.status.leverage", "Leverage Range")}</span><span className="font-mono">{risk.minLev} - {risk.maxLev}x</span></div>
+                        <div className="flex items-center justify-between py-2"><span className="text-muted-foreground">{t("vault.status.maxNotional", "Max Notional")}</span><span className="font-mono">${risk.maxNotional?.toLocaleString()}</span></div>
                       </div>
                     </>
                   )}
                   {vault.type === 'private' && (
                     <>
                       <div className="pt-4 border-t border-border/40" />
-                      <div className="text-sm font-semibold mb-2">Join Private Vault</div>
+                      <div className="text-sm font-semibold mb-2">{t("vault.private.joinTitle", "Join Private Vault")}</div>
                       <JoinPrivate vaultId={vaultId} enabled={connected} />
                     </>
                   )}
@@ -337,16 +354,32 @@ function JoinPrivate({ vaultId, enabled }: { vaultId: string; enabled: boolean }
   const [code, setCode] = useState("")
   const [ok, setOk] = useState<boolean>(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const { t } = useLocale()
   return (
     <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-      <Input placeholder="Invite code" value={code} onChange={(e) => setCode(e.target.value)} className="w-64" />
-      <Button size="sm" disabled={!enabled || !code} onClick={() => {
-        // Demo gating: accept any non-empty code
-        setOk(true)
-        setMsg("Invite accepted (demo). Please deposit with wallet; on-chain whitelist must be configured beforehand.")
-      }}>Join</Button>
-      {ok && (<span className="text-xs text-green-400">Joined (demo)</span>)}
-      {msg && (<div className="text-xs text-muted-foreground">{msg}</div>)}
+      <Input
+        placeholder={t("vault.private.placeholderInput", "Invite code")}
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        className="w-64"
+      />
+      <Button
+        size="sm"
+        disabled={!enabled || !code}
+        onClick={() => {
+          setOk(true)
+          setMsg(
+            t(
+              "vault.private.joinSuccess",
+              "Invite accepted (demo). Please deposit with wallet; on-chain whitelist must be configured beforehand."
+            )
+          )
+        }}
+      >
+        {t("vault.private.join", "Join")}
+      </Button>
+      {ok && <span className="text-xs text-green-400">{t("vault.private.joined", "Joined (demo)")}</span>}
+      {msg && <div className="text-xs text-muted-foreground">{msg}</div>}
     </div>
   )
 }
