@@ -5,7 +5,7 @@
 ---
 
 ### 1. 环境与配置
-- [ ] `.env.staging` / `.env.production` 模板齐备，并与 README 配套更新。
+- [ ] `.env.staging.example` / `.env.production.example` 模板齐备，并与 README 配套更新。
 - [ ] `DEPLOYMENT_API_TOKEN` 已设置，前端演示/正式环境对其使用策略明确（演示可带 `NEXT_PUBLIC_DEPLOYMENT_KEY`，正式环境不暴露）。
 - [ ] 告警配置：`ALERT_WEBHOOK_URL`、冷却/阈值均按目标环境设定；演练一次电话/短信。
 - [ ] Staging/Prod 部署脚本（Docker Compose 或 PM2）完成，包含健康检查和日志目录规范。
@@ -20,12 +20,14 @@
 - [ ] ack fallback 说明已更新至 README/DEMO_PLAN，团队能解释“只见 ack，无 ws 推送”的原因。
 - [ ] 日志输出到集中存储（如 Loki/Elasticsearch 或文件 + 日志轮转），预警渠道接入 Slack/邮件/Webhook。
 - [ ] 快照守护与告警线程运行 ≥72h，无内存泄漏/异常关停，日志无高频错误。
+- [ ] 运行 `uv run python -m app.cli soak --duration 600 --interval 30` 验证 soak harness，可扩展至 ≥72h 并保存 `logs/soak-report.jsonl` 供复盘。
 
 ### 4. 功能回归
 - [ ] Manager：部署 → 配置（白名单/锁期/绩效费）→ Exec → 读取风险信息，全流程成功。
 - [ ] Investor：浏览 → 申购 → Portfolio 显示份额/余额 → Shock → 告警到达。
 - [ ] Listener/Status：执行后事件流包含 `source:"ack"`，StatusBar 显示最新 ack 时间；若 Hyper Testnet 无 ws 填单，能用 `/status` + ack 说明观测情况。
 - [ ] 数据精度：Discover/Portfolio 的 AUM、钱包余额等与链上数值一致，无 “固定 0”/假数据展示。
+- [ ] 统一回归脚本：`uv run python scripts/run_ci.py` 通过全部测试套件（可结合 `--only/--skip` 视场景选择）。
 
 ### 5. 文档与沟通
 - [ ] `docs/product/ROADMAP.md` Alpha 条目全部转为 “✅”；仍开放项留在 Beta 表格。

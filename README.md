@@ -127,7 +127,7 @@ flowchart LR
 ## ⚙️ 统一环境变量配置说明（ `.env`）
 
 
-> 仓库仅认可根目录 `.env`，前后端/Hardhat 共用。示例见 `.env.example`。
+> 仓库仅认可根目录 `.env`，前后端/Hardhat 共用。示例见 `.env.example`；若部署到长驻环境，请先复制 `.env.staging.example` 或 `.env.production.example` 到 `.env` 并按需覆写密钥。
 
 
 | 分类 | 关键变量 | 说明 |
@@ -140,7 +140,8 @@ flowchart LR
 
 | 告警 | `ALERT_WEBHOOK_URL` / `ALERT_COOLDOWN_SEC` / `ALERT_NAV_DRAWDOWN_PCT` | 可直接使用 fwalert 链路 |
 
-| 部署写接口 | `DEPLOYMENT_API_TOKEN` | 若配置，将在调用 `/api/v1/register_deployment` 时校验 `X-Deployment-Key`，建议仅由后端脚本/CI 调用；前端仅作演示用途支持 `NEXT_PUBLIC_DEPLOYMENT_KEY` |
+| 部署写接口 | `DEPLOYMENT_API_TOKEN` | 若配置，`/api/v1/exec/*`、`/api/v1/nav/snapshot/*`、`/api/v1/positions/*`、`/api/v1/register_deployment` 均要求 `X-Deployment-Key`；建议仅由后端脚本/CI 调用，前端演示需显式传入 |
+| 日志 | `LOG_LEVEL` / `LOG_FORMAT` / `LOG_PATH` | `LOG_FORMAT=json` 输出结构化 JSON；`LOG_PATH` 留空时写 stdout，指定路径会自动创建目录并写入文件 |
 
 | 前端 | `NEXT_PUBLIC_BACKEND_URL` / `NEXT_PUBLIC_RPC_URL` / `NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS` / `NEXT_PUBLIC_ENABLE_DEMO_TRADING` | 默认显示钱包按钮；填入 Hyper USDC 可跳过 MockERC20 流程 |
 
@@ -259,8 +260,11 @@ flowchart LR
 | 合约（Foundry，可选） | `forge test -vvv` | 不变量/模糊测试（见 `contracts/test/`） |
 
 | 后端 | `uv run pytest -q` | 44 条：指标、风控、重试、快照、listener、告警、CLI |
+| 后端 soak 监控 | `uv run python -m app.cli soak --duration 600 --interval 30` | 长时间健康检查，生成 `logs/soak-report.jsonl` 供 Alpha 稳定性复核 |
 
 | 前端 | `pnpm run build` | 确保 Next.js 打包通过，`pnpm run lint` 可做增量校验 |
+
+> 需要一次性运行全部测试可执行：`uv run python scripts/run_ci.py`（支持 `--only backend`、`--skip frontend` 等筛选）。
 
   
 

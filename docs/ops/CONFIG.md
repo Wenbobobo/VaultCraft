@@ -60,6 +60,8 @@
 - ALERT_NAV_DRAWDOWN_PCT：NAV 回撤触发阈值（默认 0.05，即 5%）
 - ENABLE_CLOSE_FALLBACK_RO：实单 close 失败时是否尝试 Reduce-Only fallback（默认 1）
 - POSITIONS_FILE / EVENT_LOG_FILE：本地持仓/事件持久化（演示）
+- DEPLOYMENT_API_TOKEN：设置后，所有后台写接口（exec/open|close、nav/snapshot、positions:set、register_deployment）都要求携带 `X-Deployment-Key`
+- LOG_LEVEL / LOG_FORMAT / LOG_PATH：后端日志级别与格式（`json` 输出结构化日志），指定 `LOG_PATH` 时会自动创建目录并写入文件
 
 ---
 
@@ -67,3 +69,5 @@
 
 - 所有敏感密钥仅存放在本地 .env 或安全密管；不要提交到仓库
 - 部署成功后将地址同步到 deployments/*.json 并告知前端/后端团队
+- 长驻环境请以 `.env.staging.example` / `.env.production.example` 为模板拷贝至 `.env`，避免遗漏生产所需的限权与日志配置
+- 回归测试可通过 `uv run python scripts/run_ci.py` 一键执行 Hardhat / Backend / Frontend 套件，支持 `--only`、`--skip` 筛选

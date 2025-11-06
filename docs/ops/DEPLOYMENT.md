@@ -25,10 +25,14 @@ npm install
 
 ## 2. 配置环境变量
 
-复制示例并填写：
+复制示例并填写（本地开发推荐 `.env.example`；长驻环境可改用 `.env.staging.example` 或 `.env.production.example` 再按需覆写密钥）：
 
-```
+```powershell
+# 本地开发
 Copy-Item .env.example .env
+# 或部署前
+# Copy-Item .env.staging.example .env
+# Copy-Item .env.production.example .env
 ```
 
 编辑根目录 `.env`：
@@ -60,6 +64,7 @@ EVENT_LOG_FILE=logs/events.jsonl
 #PERF_FEE_BPS=1000
 #LOCK_DAYS=1
 ```
+> 提示：配置 `DEPLOYMENT_API_TOKEN` 后，所有写操作端点（`/api/v1/exec/*`、`/api/v1/nav/snapshot/*`、`/api/v1/positions/*`、`/api/v1/register_deployment`）均需在请求头携带 `X-Deployment-Key`，否则返回 401。
 
 网络选择说明：
 - hyperTestnet / baseSepolia / arbitrumSepolia 由 hardhat.config.ts 预置；
@@ -117,6 +122,7 @@ uv run uvicorn app.main:app --reload --port 8000
 - 健康检查 `GET /health`
 - 市场与价格：`GET /api/v1/markets`、`GET /api/v1/price?symbols=BTC,ETH`
 - 金库与详情：`GET /api/v1/vaults`、`GET /api/v1/vaults/:id`
+- soak 监控（5 分钟示例，可调大至 72h）：`uv run python -m app.cli soak --duration 600 --interval 30`
 
 可选：启用 Hyper 官方 SDK 作为行情源（见 HYPER_DEPLOYMENT.md 第 2 节）。
 
