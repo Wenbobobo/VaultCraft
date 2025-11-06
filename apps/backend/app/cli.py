@@ -3,12 +3,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 from typing import Dict
+
+import httpx
 
 from .hyper_client import HyperHTTP, DEFAULT_API, DEFAULT_RPC
 from .hyper_exec import HyperExecClient, Order
 from .exec_service import ExecService
 from .positions import get_profile, set_profile
+from .soak import run_soak, file_sink
 
 
 def cmd_rpc_ping(args: argparse.Namespace) -> None:
@@ -118,6 +122,47 @@ def main() -> None:
     p6.add_argument("vault")
     p6.add_argument("profile", help='JSON, e.g. {"cash":1000000,"positions":{"BTC":0.1,"ETH":2.0},"denom":1000000}')
     p6.set_defaults(func=cmd_positions_set)
+
+    def cmd_soak(args: argparse.Namespace) -> None:
+        base = args.backend.rstrip("/")
+        timeout = httpx.Timeout(args.timeout, connect=args.timeout)
+        sink = file_sink(Path(args.outfile))
+
+        with httpx.Client(base_url=base, timeout=timeout) as client:
+            def fetch_status():
+                resp = client.get("/api/v1/status")
+                resp.raise_for_status()
+                return resp.json()
+
+            def fetch_vaults():
+                resp = client.get("/api/v1/vaults")
+                resp.raise_for_status()
+                data = resp.json()
+                vaults = data.get("vaults", [])
+                return [v.get("id") for v in vaults if isinstance(v, dict) and v.get("id")]
+
+            def fetch_metrics(vault_id: str):
+                resp = client.get(f"/api/v1/metrics/{vault_id}")
+                resp.raise_for_status()
+                return resp.json()
+
+            summary = run_soak(
+                duration_sec=args.duration,
+                interval_sec=args.interval,
+                fetch_status=fetch_status,
+                fetch_vaults=fetch_vaults,
+                fetch_metrics=fetch_metrics,
+                sink=sink,
+            )
+        print(json.dumps(summary, indent=2))
+
+    p7 = sub.add_parser("soak", help="Run soak monitoring loop against a running backend")
+    p7.add_argument("--backend", default=os.getenv("BACKEND_URL", "http://127.0.0.1:8000"), help="Backend base URL")
+    p7.add_argument("--duration", type=float, default=300.0, help="Duration in seconds (default 5 minutes)")
+    p7.add_argument("--interval", type=float, default=30.0, help="Sampling interval in seconds")
+    p7.add_argument("--outfile", default="logs/soak-report.jsonl", help="Analytics NDJSON output")
+    p7.add_argument("--timeout", type=float, default=10.0, help="HTTP timeout per request")
+    p7.set_defaults(func=cmd_soak)
 
     args = parser.parse_args()
     args.func(args)

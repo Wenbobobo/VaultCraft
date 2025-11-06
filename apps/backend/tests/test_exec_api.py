@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.events import store as event_store
 from app.positions import get_profile
+from app.settings import settings
 
 
 def test_exec_open_dry_run(tmp_path, monkeypatch):
@@ -41,3 +42,22 @@ def test_exec_close_dry_run(tmp_path, monkeypatch):
     prof = get_profile("0xv")
     # After close of 0.5 from 1.0 → 0.5
     assert abs(prof["positions"].get("ETH", 0.0) - 0.5) < 1e-9
+
+
+def test_exec_requires_deployment_token(tmp_path, monkeypatch):
+    store = tmp_path / "positions.json"
+    monkeypatch.setenv("POSITIONS_FILE", str(store))
+    monkeypatch.setenv("ENABLE_LIVE_EXEC", "0")
+    token = "sec-token"
+    monkeypatch.setattr(settings, "DEPLOYMENT_API_TOKEN", token, raising=False)
+    c = TestClient(app)
+
+    resp = c.post("/api/v1/exec/open", params={"symbol": "ETH", "size": 1.0, "side": "buy"})
+    assert resp.status_code == 401
+
+    ok = c.post(
+        "/api/v1/exec/open",
+        params={"symbol": "ETH", "size": 1.0, "side": "buy", "vault": "0xguard"},
+        headers={"X-Deployment-Key": token},
+    )
+    assert ok.status_code == 200

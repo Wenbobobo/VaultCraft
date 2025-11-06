@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     ALERT_NAV_DRAWDOWN_PCT: float = 0.05
     # Deployment auth
     DEPLOYMENT_API_TOKEN: str | None = None
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "text"
+    LOG_PATH: str | None = None
 
     # pydantic v2: model_config covers env loading and extra handling
 

@@ -1,9 +1,13 @@
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, List, Dict
-import os
 import json
+import logging
+import os
+import sys
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from .metrics import compute_metrics
 from .hyper_client import HyperHTTP, DEFAULT_API
@@ -35,6 +39,87 @@ def _repo_root() -> Path:
 
 REPO_ROOT = _repo_root()
 
+_LOG_BASE_ATTRS = {
+    "name",
+    "msg",
+    "args",
+    "levelname",
+    "levelno",
+    "pathname",
+    "filename",
+    "module",
+    "exc_info",
+    "exc_text",
+    "stack_info",
+    "lineno",
+    "funcName",
+    "created",
+    "msecs",
+    "relativeCreated",
+    "thread",
+    "threadName",
+    "processName",
+    "process",
+    "message",
+}
+
+
+class JsonLogFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload: Dict[str, Any] = {
+            "timestamp": datetime.utcnow().isoformat(timespec="milliseconds") + "Z",
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        for key, value in record.__dict__.items():
+            if key in _LOG_BASE_ATTRS or key.startswith("_"):
+                continue
+            try:
+                json.dumps(value)
+                payload[key] = value
+            except TypeError:
+                payload[key] = str(value)
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def _configure_logging() -> None:
+    level_name = str(getattr(settings, "LOG_LEVEL", "INFO") or "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    fmt = str(getattr(settings, "LOG_FORMAT", "text") or "text").lower()
+    log_path = getattr(settings, "LOG_PATH", None)
+
+    handlers: List[logging.Handler] = []
+    if log_path:
+        path = Path(log_path)
+        if not path.is_absolute():
+            path = REPO_ROOT / path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(logging.FileHandler(path, encoding="utf-8"))
+    else:
+        handlers.append(logging.StreamHandler(sys.stdout))
+
+    if fmt == "json":
+        formatter: logging.Formatter = JsonLogFormatter()
+    else:
+        formatter = logging.Formatter(
+            "%(asctime)s %(levelname)s %(name)s - %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
+        )
+
+    for handler in handlers:
+        handler.setFormatter(formatter)
+
+    logging.basicConfig(level=level, handlers=handlers, force=True)
+    logging.captureWarnings(True)
+
+
+_configure_logging()
+logger = logging.getLogger("vaultcraft.backend")
+logger.propagate = False
+
 app = FastAPI(title="VaultCraft v0 API")
 
 _LOCAL_DEV_ORIGINS = [
@@ -50,6 +135,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _validate_deployment_key(token: str | None) -> None:
+    required = (getattr(settings, "DEPLOYMENT_API_TOKEN", None) or "").strip()
+    if required and token != required:
+        raise HTTPException(status_code=401, detail="invalid deployment token")
+
+
+def require_deployment_key(
+    request: Request, token: str | None = Header(default=None, alias="X-Deployment-Key")
+):
+    try:
+        _validate_deployment_key(token)
+    except HTTPException as exc:
+        logger.warning(
+            "deployment token rejected",
+            extra={"event": "auth.reject", "path": request.url.path, "token_present": token is not None},
+        )
+        raise exc
+    return token
 
 
 @app.get("/health")
@@ -185,7 +290,12 @@ def api_nav_series(address: str, since: float | None = None, window: int | None 
 
 
 @app.post("/api/v1/nav/snapshot/{address}")
-def api_nav_snapshot(address: str, nav: float | None = None, ts: float | None = None):
+def api_nav_snapshot(
+    address: str,
+    nav: float | None = None,
+    ts: float | None = None,
+    _token: str | None = Depends(require_deployment_key),
+):
     """Create a NAV snapshot for a vault.
 
     If `nav` is omitted, compute from positions + prices at call time.
@@ -206,6 +316,15 @@ def api_nav_snapshot(address: str, nav: float | None = None, ts: float | None = 
         nav = round(nav_val / profile.get("denom", 1_000_000.0), 6)
     snapshot_store.add(address, float(nav), ts)
     _nav_cache.clear()
+    logger.info(
+        "nav snapshot stored",
+        extra={
+            "event": "nav.snapshot",
+            "vault": address,
+            "nav": float(nav),
+            "ts": ts,
+        },
+    )
     try:
         alert_manager.on_nav(address, float(nav))
     except Exception:
@@ -292,15 +411,12 @@ def api_register_deployment(
     asset: str | None = None,
     name: str | None = None,
     type: str | None = None,
-    token: str | None = Header(default=None, alias="X-Deployment-Key"),
+    _token: str | None = Depends(require_deployment_key),
 ):
     """Record a deployment in deployments/hyper-testnet.json for discovery.
 
     This is a convenience for demo. In production this should be guarded.
     """
-    required = getattr(settings, "DEPLOYMENT_API_TOKEN", "") or ""
-    if required and token != required:
-        raise HTTPException(status_code=401, detail="invalid deployment token")
     f = REPO_ROOT / "deployments" / "hyper-testnet.json"
     try:
         meta = json.loads(f.read_text()) if f.exists() else {}
@@ -344,20 +460,73 @@ def api_register_deployment(
         meta["name"] = name
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    logger.info(
+        "deployment metadata updated",
+        extra={
+            "event": "deployment.register",
+            "vault": vault,
+            "asset": asset,
+            "type": type or "public",
+            "updated": updated,
+            "path": str(f),
+        },
+    )
     return {"ok": True, "path": str(f), "deployments": deployments}
 
 
 # --- Exec Service (dry-run env-controlled) ---
 @app.post("/api/v1/exec/open")
-def api_exec_open(symbol: str, size: float, side: str, reduce_only: bool = False, leverage: float | None = None, vault: str = "_global"):
+def api_exec_open(
+    symbol: str,
+    size: float,
+    side: str,
+    reduce_only: bool = False,
+    leverage: float | None = None,
+    vault: str = "_global",
+    _token: str | None = Depends(require_deployment_key),
+):
     svc = ExecService()
-    return svc.open(vault, Order(symbol=symbol, size=size, side=side, reduce_only=reduce_only, leverage=leverage))
+    result = svc.open(
+        vault, Order(symbol=symbol, size=size, side=side, reduce_only=reduce_only, leverage=leverage)
+    )
+    logger.info(
+        "exec.open processed",
+        extra={
+            "event": "exec.open",
+            "vault": vault,
+            "symbol": symbol,
+            "size": size,
+            "side": side,
+            "reduce_only": reduce_only,
+            "leverage": leverage,
+            "dry_run": bool(result.get("dry_run")),
+            "status": result.get("status", "ok"),
+        },
+    )
+    return result
 
 
 @app.post("/api/v1/exec/close")
-def api_exec_close(symbol: str, size: float | None = None, vault: str = "_global"):
+def api_exec_close(
+    symbol: str,
+    size: float | None = None,
+    vault: str = "_global",
+    _token: str | None = Depends(require_deployment_key),
+):
     svc = ExecService()
-    return svc.close(vault, symbol=symbol, size=size)
+    result = svc.close(vault, symbol=symbol, size=size)
+    logger.info(
+        "exec.close processed",
+        extra={
+            "event": "exec.close",
+            "vault": vault,
+            "symbol": symbol,
+            "size": size,
+            "dry_run": bool(result.get("dry_run")),
+            "status": result.get("status", "ok"),
+        },
+    )
+    return result
 
 
 @app.get("/api/v1/pretrade")
@@ -490,10 +659,26 @@ def api_positions_get(vault_id: str):
 
 
 @app.post("/api/v1/positions/{vault_id}")
-def api_positions_set(vault_id: str, profile: Dict[str, object]):
+def api_positions_set(
+    vault_id: str,
+    profile: Dict[str, object],
+    _token: str | None = Depends(require_deployment_key),
+):
     from .positions import set_profile
 
     set_profile(vault_id, profile)
+    try:
+        fields = sorted(profile.keys())
+    except Exception:
+        fields = []
+    logger.info(
+        "positions profile updated",
+        extra={
+            "event": "positions.set",
+            "vault": vault_id,
+            "fields": fields,
+        },
+    )
     unit = HyperExecClient.pnl_to_nav(
         cash=float(profile.get("cash", 1_000_000.0)),
         positions={str(k): float(v) for k, v in dict(profile.get("positions", {})).items()},
