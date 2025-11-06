@@ -40,7 +40,7 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
     const t = s.toLowerCase()
     if (t.includes("symbol") && t.includes("not allowed")) return "Symbol not in allowlist"
     if (t.includes("leverage")) return "Leverage out of bounds"
-    if (t.includes("below minimum")) return "Notional below minimum ($10)"
+    if (t.includes("below minimum") || t.includes("minimum value")) return "Notional below minimum ($10)"
     if (t.includes("size") || t.includes("notional")) return "Size exceeds risk limit"
     if (t.includes("side")) return "Invalid side"
     return s
@@ -139,7 +139,7 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
         <div className="text-xs text-muted-foreground mb-2">{minNotional != null ? `Min notional $${minNotional}` : ''} {levRange ? ` · Lev ${levRange[0]}–${levRange[1]}x` : ''}</div>
       )}
       {error && (
-        <div className="text-xs text-destructive mb-2">{error}</div>
+        <div data-testid="exec-error" className="text-xs text-destructive mb-2">{error}</div>
       )}
       {msg && (
         <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all">{msg}</pre>
