@@ -3,9 +3,11 @@
 ## 当前进度（最新）
 
 - 文档
-  - PRD v0（../product/PRD.md）；Tech Design（../architecture/TECH_DESIGN.md）；架构解析（../architecture/ARCHITECTURE.md）；前端规范（../architecture/FRONTEND_SPEC.md）；配置清单（CONFIG.md）；Hyper 集成（../architecture/HYPER_INTEGRATION.md）；Hyper 部署（HYPER_DEPLOYMENT.md）
+  - PRD v0（../product/PRD.md）；Tech Design（../architecture/TECH_DESIGN.md）；架构解析（../architecture/ARCHITECTURE.md）；前端规范（../architecture/FRONTEND_SPEC.md）；配置清单（CONFIG.md）；Hyper 集成（../architecture/HYPER_INTEGRATION.md）；Hyper 部署（../ops/HYPER_DEPLOYMENT.md）
   - v1 里程碑与验收清单：../product/PLAN_V1.md（黑客松演示范围 P0–P3；集中仓位相关移至 v2）
-  - README.md 全量重写（Hyper Testnet 定位、Feature Matrix、Quickstart、Roadmap）；新增 `docs/ops/PITCH_DECK.md` 路演稿
+  - README.md 更新 Hyper Testnet 定位、Feature Matrix、Quickstart、Roadmap；新增 `docs/ops/PITCH_DECK.md` 路演稿
+  - 商用化路线图：`docs/product/ROADMAP.md`（Alpha 稳健化、Beta 专业交易面板、Gamma 多市场、Delta 商业化）
+  - DEPLOYMENT Alpha 自查清单：`docs/ops/DEPLOYMENT_ALPHA_CHECKLIST.md`
 - 合约（Hardhat + Foundry）
   - Vault（ERC20 shares，最短锁定、HWM 绩效费、私募白名单、适配器白名单、可暂停）
   - Hardhat 测试 + 覆盖率：Vault.sol statements 85.71%，branches 51.16%，functions 77.78%，lines 100%
@@ -14,7 +16,9 @@
   - 新增 API：GET `/api/v1/metrics/:address`、GET `/api/v1/nav/:address`、GET `/api/v1/events/:address`
     - 支持通过 `series` 查询参数喂入 NAV（测试/演示用）；生产接入存储/索引器
   - HyperHTTP 增强：`get_markets()`、`get_index_prices(symbols)`（测试用 monkeypatch，无需外网）
-  - HyperExec 增强：杠杆区间校验（`min_leverage/max_leverage`）、`build_reduce_only()`
+  - HyperExec 增强：杠杆区间校验（`min_leverage/max_leverage`）、`build_reduce_only()`；`/api/v1/status` 增加 `lastAckTs` 字段；`/api/v1/register_deployment` 支持 `DEPLOYMENT_API_TOKEN`
+  - `/api/v1/register_deployment` 支持 `DEPLOYMENT_API_TOKEN` 鉴权（缺省仅 demo 使用）
+  - `/api/v1/status` 增加 `lastAckTs` 字段，前端状态栏显示最近 ack 时间（配合 ack fallback 说明）
   - CORS 现支持任意 `localhost`/`127.0.0.1` 端口（regex 匹配），解决 `localhost`⇄`127` 混用导致的 `Failed to fetch`；新增 `test_artifact_cors_allows_local_dev` 回归测试
   - Exec Service：最小名义金额校验（默认 $10）、close reduce-only fallback、事件打点（source=ack/ws）；`/api/v1/status` 返回运行态（listener/snapshot running/idle/disabled）；实单滑点默认 10bps（`EXEC_MARKET_SLIPPAGE_BPS` 可调），遇流动性错误按 `EXEC_RETRY_ATTEMPTS`/`EXEC_RETRY_BACKOFF_SEC` 退避重试；已成功验证 0.01 ETH 开仓（测试网平仓需等待对手单，详见 ISSUES.md）。
   - Listener Registry：`exec_service` 在 open/close 时登记 Vault，WS listener 将 fills fan-out 到所有登记 Vault（source=`ws`），并配合 `snapshot_now` 更新 NAV；新增 `listener_registry` 模块与覆盖单测（`test_user_listener.py`）。
@@ -73,12 +77,9 @@
 
   > 图例：✅ 已满足验收；🔄 进行中；⏳ 待回归/验证。
 
-- **v1 当前待办 / 风险**
-- [ ] Listener e2e 验证：listener registry 已 fan-out 至 Vault，仍需在 Hyper Testnet 实测 `source:"ws"`（测试网偶尔无实时 fills，需准备截图与复现说明）。
-  - 2025-10-19 再次尝试 ETH 0.02 buy（order=41408472092）仍未收到 `last_ws_event`；事件流仅有 `source:"ack"`，保持 ack fallback 并记录演示话术。
-- [ ] Demo 剧本回归：自测“创建 → 申购 → 下单 → Shock → 告警”，确认 Skeleton/空态/提示完整并更新 DEMO_PLAN。
-  - [ ] 空态与提示：Manager/Discover/Portfolio Skeleton、错误提示再打磨，准备 Showcase 截图。
-  - [ ] Alert 演示指引：在 DEMO_PLAN 中补充 webhook 演示提示（如何触发 drawdown、冷却/降级说明）。
+- **v1 当前待办 / 风险**（已并入 ROADMAP Alpha/Beta）
+- Listener ws 仍以 ack fallback 说明为主（2025-10-19 订单 41408472092 仍无 `source:"ws"`）。
+- Demo 脚本/空态优化事项转移至 Alpha“运行稳定性 & 验收 checklist”。
 
 
 ---
@@ -155,3 +156,6 @@
 8. **手动验收**：推荐 `.env` 设置 `EXEC_MARKET_SLIPPAGE_BPS=50`、`EXEC_RO_SLIPPAGE_BPS=75`、`EXEC_RETRY_ATTEMPTS=2`、`EXEC_RETRY_BACKOFF_SEC=2`，先 `exec-open`（dry-run/少量）后 `exec-close`；事件与 StatusBar 会展示 attempts 与最近 fill 时间。
 9. **本地 CORS**：后端默认允许 `http://localhost:3000` / `http://127.0.0.1:3000`，确保前端使用此域名启动；如需其它源，请调整 `apps/backend/app/main.py` 中的 `CORSMiddleware` 配置。
 10. **告警配置**：若需电话/短信告警，请在 `.env` 配置 `ALERT_WEBHOOK_URL`（例如 fwalert 链路）、`ALERT_COOLDOWN_SEC`、`ALERT_NAV_DRAWDOWN_PCT`，演示前可先用 Shock 或模拟 exec error 验证。
+
+### Gamma / Delta（预研）
+- 多 venue 适配、WhisperFi 私募增强、Merke 承诺、费用结算等细化见 ROADMAP 文档。

@@ -140,6 +140,8 @@ flowchart LR
 
 | 告警 | `ALERT_WEBHOOK_URL` / `ALERT_COOLDOWN_SEC` / `ALERT_NAV_DRAWDOWN_PCT` | 可直接使用 fwalert 链路 |
 
+| 部署写接口 | `DEPLOYMENT_API_TOKEN` | 若配置，将在调用 `/api/v1/register_deployment` 时校验 `X-Deployment-Key`，建议仅由后端脚本/CI 调用；前端仅作演示用途支持 `NEXT_PUBLIC_DEPLOYMENT_KEY` |
+
 | 前端 | `NEXT_PUBLIC_BACKEND_URL` / `NEXT_PUBLIC_RPC_URL` / `NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS` / `NEXT_PUBLIC_ENABLE_DEMO_TRADING` | 默认显示钱包按钮；填入 Hyper USDC 可跳过 MockERC20 流程 |
 
 | 持久化 | `POSITIONS_FILE` / `EVENT_LOG_FILE` | 默认 `deployments/positions.json` / `logs/events.jsonl` |
