@@ -22,7 +22,7 @@ type Net = { rpc?: string | null; chainId?: number | null; block?: number | null
 export function StatusBar() {
   const [flags, setFlags] = useState<Flags | null>(null)
   const [net, setNet] = useState<Net | null>(null)
-  const [runtime, setRuntime] = useState<{ listener?: string; snapshot?: string; listenerLastTs?: number | null } | null>(null)
+  const [runtime, setRuntime] = useState<{ listener?: string; snapshot?: string; listenerLastTs?: number | null; lastAckTs?: number | null } | null>(null)
   const { t } = useLocale()
 
   useEffect(() => {
@@ -69,6 +69,14 @@ export function StatusBar() {
       className: base === "running" ? "text-green-400" : "text-yellow-400",
     }
   })()
+  const lastAckLabel = (() => {
+    if (!runtime?.lastAckTs) return null
+    const ageSec = Math.max(0, Math.round(Date.now() / 1000 - runtime.lastAckTs))
+    if (ageSec < 60) return t("status.ack.recent", "last ack <1m")
+    if (ageSec < 3600) return t("status.ack.minutes", "last ack {m}m").replace("{m}", Math.floor(ageSec / 60).toString())
+    return t("status.ack.hours", "last ack {h}h").replace("{h}", Math.floor(ageSec / 3600).toString())
+  })()
+
   return (
     <div className="text-xs text-muted-foreground flex items-center gap-4 px-4 py-2 border-b border-border/40">
       <div>
@@ -107,6 +115,11 @@ export function StatusBar() {
           <span className={runtime?.snapshot === "running" ? "text-green-400" : "text-yellow-400"}>
             {runtime?.snapshot || t("status.snapshot.idle", "idle")}
           </span>
+        </div>
+      )}
+      {lastAckLabel && (
+        <div>
+          {t("status.ack.label", "Ack")}: <span className="font-mono text-primary">{lastAckLabel}</span>
         </div>
       )}
       {net && (

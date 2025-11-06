@@ -8,6 +8,7 @@ from .settings import settings, Settings
 from .events import store as event_store
 from .positions import apply_fill, apply_close, get_profile
 from .navcalc import snapshot_now
+from .ack_tracker import record as record_ack
 from .price_provider import PriceRouter
 import json
 import time
@@ -202,10 +203,12 @@ class ExecService:
             # Basic success detection: treat presence of 'error' in ack tree as failure
             payload = ack.get("ack") if isinstance(ack, dict) else ack
             event_store.add(vault, {"type": "exec_open", "status": ("ack" if ok else "error"), "payload": ack, "attempts": attempts})
-            if ok and settings.APPLY_LIVE_TO_POSITIONS:
-                apply_fill(vault, order.symbol, order.size, order.side)
-                unit = snapshot_now(vault)
-                event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": order.symbol, "side": order.side, "size": order.size, "unitNav": unit})
+            if ok:
+                record_ack(vault)
+                if settings.APPLY_LIVE_TO_POSITIONS:
+                    apply_fill(vault, order.symbol, order.size, order.side)
+                    unit = snapshot_now(vault)
+                    event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": order.symbol, "side": order.side, "size": order.size, "unitNav": unit})
             return {"ok": ok, "payload": ack, "attempts": attempts}
         except Exception as e:
             event_store.add(vault, {"type": "exec_open", "status": "error", "error": str(e)})
@@ -227,6 +230,7 @@ class ExecService:
             payload_ack = ack.get("ack") if isinstance(ack, dict) else ack
             if ok:
                 event_store.add(vault, {"type": "exec_close", "status": "ack", "payload": ack, "attempts": attempts})
+                record_ack(vault)
                 if settings.APPLY_LIVE_TO_POSITIONS:
                     apply_close(vault, symbol, size)
                     unit = snapshot_now(vault)
@@ -243,10 +247,12 @@ class ExecService:
                         ack2, ok2, attempts2 = self._run_with_retry(driver.open, ro)
                         payload_ack2 = ack2.get("ack") if isinstance(ack2, dict) else ack2
                         event_store.add(vault, {"type": "exec_close", "status": ("ack" if ok2 else "error"), "payload": ack2, "attempts": attempts2, "mode": "reduce_only"})
-                        if ok2 and settings.APPLY_LIVE_TO_POSITIONS:
-                            apply_close(vault, symbol, size)
-                            unit = snapshot_now(vault)
-                            event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": symbol, "side": "close", "size": size, "unitNav": unit})
+                        if ok2:
+                            record_ack(vault)
+                            if settings.APPLY_LIVE_TO_POSITIONS:
+                                apply_close(vault, symbol, size)
+                                unit = snapshot_now(vault)
+                                event_store.add(vault, {"type": "fill", "status": "applied", "source": "ack", "symbol": symbol, "side": "close", "size": size, "unitNav": unit})
                         return {"ok": ok2, "payload": ack2, "attempts": attempts2, "mode": "reduce_only"}
                     except Exception as e2:
                         event_store.add(vault, {"type": "exec_close", "status": "error", "error": str(e2)})

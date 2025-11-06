@@ -78,6 +78,7 @@ export default function ManagerPage() {
   const [vaultsError, setVaultsError] = useState<string | null>(null)
   const [advancedLaunch, setAdvancedLaunch] = useState(false)
   const [advancedManage, setAdvancedManage] = useState(false)
+  const deploymentKey = process.env.NEXT_PUBLIC_DEPLOYMENT_KEY
 
   const validVault = ethers.isAddress(vaultAddr)
 
@@ -246,7 +247,10 @@ export default function ManagerPage() {
         if (asset) params.set("asset", asset)
         params.set("type", isPrivate ? "private" : "public")
         params.set("name", name || `Vault-${addr.slice(2, 6)}`)
-        await fetch(`${BACKEND_URL}/api/v1/register_deployment?${params.toString()}`, { method: "POST" })
+        await fetch(`${BACKEND_URL}/api/v1/register_deployment?${params.toString()}`, {
+          method: "POST",
+          headers: deploymentKey ? { "X-Deployment-Key": deploymentKey } : undefined,
+        })
         setVaults((prev) => {
           const existing = new Map<string, VaultSummary>()
           const nextEntry: VaultSummary = { id: addr, name, type: isPrivate ? "private" : "public", asset }

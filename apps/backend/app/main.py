@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Dict
 import os
@@ -17,6 +17,7 @@ from .events import store as event_store
 from .exec_service import ExecService
 from .daemon import SnapshotDaemon
 from .user_listener import UserEventsListener, last_ws_event
+from .ack_tracker import last as last_ack_event
 from .hyper_client import HyperHTTP
 from .alerts import manager as alert_manager
 
@@ -98,10 +99,17 @@ def api_status():
         last_ws = last_ws_event(vault_key)
     except Exception:
         last_ws = None
+    last_ack = None
+    try:
+        latest = last_ack_event("_latest")
+        last_ack = latest
+    except Exception:
+        last_ack = None
     state = {
         "listener": listener_state,
         "snapshot": snapshot_state,
         "listenerLastTs": last_ws,
+        "lastAckTs": last_ack,
     }
     return {"ok": True, "flags": flags, "network": rpc, "state": state}
 
@@ -279,11 +287,20 @@ def api_artifact_mockerc20():
 
 
 @app.post("/api/v1/register_deployment")
-def api_register_deployment(vault: str, asset: str | None = None, name: str | None = None, type: str | None = None):
+def api_register_deployment(
+    vault: str,
+    asset: str | None = None,
+    name: str | None = None,
+    type: str | None = None,
+    token: str | None = Header(default=None, alias="X-Deployment-Key"),
+):
     """Record a deployment in deployments/hyper-testnet.json for discovery.
 
     This is a convenience for demo. In production this should be guarded.
     """
+    required = getattr(settings, "DEPLOYMENT_API_TOKEN", "") or ""
+    if required and token != required:
+        raise HTTPException(status_code=401, detail="invalid deployment token")
     f = REPO_ROOT / "deployments" / "hyper-testnet.json"
     try:
         meta = json.loads(f.read_text()) if f.exists() else {}

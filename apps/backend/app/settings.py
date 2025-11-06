@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     ALERT_WEBHOOK_URL: str | None = None
     ALERT_COOLDOWN_SEC: float = 120.0
     ALERT_NAV_DRAWDOWN_PCT: float = 0.05
+    # Deployment auth
+    DEPLOYMENT_API_TOKEN: str | None = None
 
     # pydantic v2: model_config covers env loading and extra handling
 
