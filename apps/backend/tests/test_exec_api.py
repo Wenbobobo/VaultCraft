@@ -61,3 +61,29 @@ def test_exec_requires_deployment_token(tmp_path, monkeypatch):
         headers={"X-Deployment-Key": token},
     )
     assert ok.status_code == 200
+
+
+def test_exec_limit_order_payload(tmp_path, monkeypatch):
+    store = tmp_path / "positions.json"
+    monkeypatch.setenv("POSITIONS_FILE", str(store))
+    monkeypatch.setenv("ENABLE_LIVE_EXEC", "0")
+    c = TestClient(app)
+    r = c.post(
+        "/api/v1/exec/open",
+        params={
+            "symbol": "ETH",
+            "size": 0.2,
+            "side": "buy",
+            "order_type": "limit",
+            "limit_price": 2500,
+            "time_in_force": "Gtc",
+            "take_profit": 3000,
+            "stop_loss": 2200,
+            "vault": "0xlim",
+        },
+    )
+    assert r.status_code == 200
+    payload = r.json()["payload"]
+    assert payload["order_type"]["limit"]["price"] == 2500
+    assert payload.get("take_profit") == 3000
+    assert payload.get("stop_loss") == 2200

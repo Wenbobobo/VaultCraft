@@ -36,6 +36,12 @@ def test_exec_validation_symbol_and_notional(monkeypatch, tmp_path):
     r3 = svc.open("0xv", Order(symbol="ETH", size=0.4, side="buy"))
     assert r3["ok"] is True
 
+    r4 = svc.open("0xv", Order(symbol="ETH", size=0.2, side="buy", order_type="limit"))
+    assert r4["ok"] is False and "limit_price" in r4["error"]
+
+    r5 = svc.open("0xv", Order(symbol="ETH", size=0.2, side="buy", order_type="limit", limit_price=1500.0))
+    assert r5["ok"] is True
+
 
 def test_min_notional_rejected(monkeypatch, tmp_path):
     monkeypatch.setenv("POSITIONS_FILE", str(tmp_path / "positions.json"))

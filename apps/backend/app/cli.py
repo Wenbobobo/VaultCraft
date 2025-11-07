@@ -128,7 +128,7 @@ def main() -> None:
         timeout = httpx.Timeout(args.timeout, connect=args.timeout)
         sink = file_sink(Path(args.outfile))
 
-        with httpx.Client(base_url=base, timeout=timeout) as client:
+        with httpx.Client(base_url=base, timeout=timeout, trust_env=False) as client:
             def fetch_status():
                 resp = client.get("/api/v1/status")
                 resp.raise_for_status()

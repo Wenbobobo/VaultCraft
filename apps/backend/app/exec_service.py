@@ -102,7 +102,19 @@ class HyperSDKDriver(ExecDriver):
 
     def open(self, order: Order) -> Dict[str, Any]:
         is_buy = True if order.side == "buy" else False
-        if order.reduce_only:
+        kind = (order.order_type or "market").lower()
+        if kind == "limit":
+            px = float(order.limit_price)
+            tif = (order.time_in_force or "Gtc").title()
+            res = self._exch.order(
+                name=order.symbol,
+                is_buy=is_buy,
+                sz=float(order.size),
+                limit_px=px,
+                order_type={"limit": {"tif": tif}},
+                reduce_only=order.reduce_only,
+            )
+        elif order.reduce_only:
             slippage = self._reduce_slippage
             px = float(self._exch._slippage_price(order.symbol, is_buy, slippage, None))  # type: ignore[attr-defined]
             res = self._exch.order(
@@ -169,6 +181,16 @@ class ExecService:
         lev = order.leverage if order.leverage is not None else env.EXEC_MIN_LEVERAGE
         if lev < env.EXEC_MIN_LEVERAGE or lev > env.EXEC_MAX_LEVERAGE:
             raise ValueError("leverage out of range")
+        kind = (order.order_type or "market").lower()
+        if kind not in {"market", "limit"}:
+            raise ValueError("unsupported order_type")
+        if kind == "limit":
+            if order.limit_price is None or order.limit_price <= 0:
+                raise ValueError("limit_price required for limit order")
+        if order.stop_loss is not None and order.stop_loss <= 0:
+            raise ValueError("stop_loss must be positive")
+        if order.take_profit is not None and order.take_profit <= 0:
+            raise ValueError("take_profit must be positive")
         # Notional check
         price = 0.0
         try:

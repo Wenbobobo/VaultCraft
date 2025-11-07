@@ -14,6 +14,11 @@ class Order:
     side: str  # "buy" | "sell"
     reduce_only: bool = False
     leverage: float | None = None
+    order_type: str = "market"  # "market" | "limit"
+    limit_price: float | None = None
+    time_in_force: str | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
 
 class HyperExecClient:
@@ -39,19 +44,42 @@ class HyperExecClient:
     def build_open_order(self, order: Order) -> Dict[str, Any]:
         assert order.side in ("buy", "sell"), "invalid side"
         assert order.size > 0, "size must be > 0"
-        payload = {
+        payload: Dict[str, Any] = {
             "type": "open",
             "symbol": order.symbol,
             "side": order.side,
             "size": order.size,
             "reduce_only": order.reduce_only,
         }
+        kind = (order.order_type or "market").lower()
+        if kind not in {"market", "limit"}:
+            raise ValueError("unsupported order_type")
+        if kind == "limit":
+            if order.limit_price is None or order.limit_price <= 0:
+                raise ValueError("limit_price required for limit order")
+            tif = (order.time_in_force or "Gtc").title()
+            payload["order_type"] = {
+                "limit": {
+                    "tif": tif,
+                    "price": order.limit_price,
+                }
+            }
+        else:
+            payload["order_type"] = {"market": {}}
         if order.leverage is not None:
             if self.min_leverage is not None and order.leverage < self.min_leverage:
                 raise ValueError("leverage below minimum")
             if self.max_leverage is not None and order.leverage > self.max_leverage:
                 raise ValueError("leverage above maximum")
             payload["leverage"] = order.leverage
+        if order.stop_loss is not None:
+            if order.stop_loss <= 0:
+                raise ValueError("stop_loss must be positive")
+            payload["stop_loss"] = order.stop_loss
+        if order.take_profit is not None:
+            if order.take_profit <= 0:
+                raise ValueError("take_profit must be positive")
+            payload["take_profit"] = order.take_profit
         return payload
 
     def build_reduce_only(self, symbol: str, size: float, side: str) -> Dict[str, Any]:

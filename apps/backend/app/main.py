@@ -482,12 +482,29 @@ def api_exec_open(
     side: str,
     reduce_only: bool = False,
     leverage: float | None = None,
+    order_type: str = "market",
+    limit_price: float | None = None,
+    time_in_force: str | None = None,
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
     vault: str = "_global",
     _token: str | None = Depends(require_deployment_key),
 ):
     svc = ExecService()
     result = svc.open(
-        vault, Order(symbol=symbol, size=size, side=side, reduce_only=reduce_only, leverage=leverage)
+        vault,
+        Order(
+            symbol=symbol,
+            size=size,
+            side=side,
+            reduce_only=reduce_only,
+            leverage=leverage,
+            order_type=order_type,
+            limit_price=limit_price,
+            time_in_force=time_in_force,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        ),
     )
     logger.info(
         "exec.open processed",
@@ -499,6 +516,9 @@ def api_exec_open(
             "side": side,
             "reduce_only": reduce_only,
             "leverage": leverage,
+            "order_type": order_type,
+            "limit_price": limit_price,
+            "time_in_force": time_in_force,
             "dry_run": bool(result.get("dry_run")),
             "status": result.get("status", "ok"),
         },

@@ -20,6 +20,11 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
   const [error, setError] = useState<string | null>(null)
   const [reduceOnly, setReduceOnly] = useState(false)
   const [leverage, setLeverage] = useState<string>("")
+  const [orderType, setOrderType] = useState<"market" | "limit">("market")
+  const [limitPrice, setLimitPrice] = useState<string>("")
+  const [timeInForce, setTimeInForce] = useState<string>("Gtc")
+  const [stopLoss, setStopLoss] = useState<string>("")
+  const [takeProfit, setTakeProfit] = useState<string>("")
   const [minNotional, setMinNotional] = useState<number | null>(null)
   const [levRange, setLevRange] = useState<[number, number] | null>(null)
   const { toast } = useToast()
@@ -76,6 +81,13 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
     setMsg(null)
     setError(null)
     try {
+      if (orderType === "limit") {
+        const px = parseFloat(limitPrice)
+        if (!limitPrice || Number.isNaN(px) || px <= 0) {
+          setError("Limit price required for limit orders")
+          return
+        }
+      }
       // pretrade check
       const pre = new URLSearchParams()
       pre.set("symbol", symbol)
@@ -83,6 +95,7 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
       pre.set("side", path.includes("open") ? side : "close")
       if (reduceOnly) pre.set("reduce_only", "true")
       if (leverage) pre.set("leverage", leverage)
+      if (orderType) pre.set("order_type", orderType)
       const preUrl = `${BACKEND_URL}/api/v1/pretrade?${pre.toString()}`
       const pr = await fetch(preUrl)
       const pj = await pr.json()
@@ -98,6 +111,11 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
         params.set("side", side)
         if (reduceOnly) params.set("reduce_only", "true")
         if (leverage) params.set("leverage", leverage)
+        params.set("order_type", orderType)
+        if (orderType === "limit" && limitPrice) params.set("limit_price", limitPrice)
+        if (orderType === "limit" && timeInForce) params.set("time_in_force", timeInForce)
+        if (takeProfit) params.set("take_profit", takeProfit)
+        if (stopLoss) params.set("stop_loss", stopLoss)
       } else {
         params.set("size", size)
       }
@@ -130,7 +148,7 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
   return (
     <div className="p-4 rounded-md border border-border/40">
       <div className="text-sm text-muted-foreground mb-2">Demo Exec (dry-run unless enabled)</div>
-      <div className="flex gap-2 items-center mb-2">
+      <div className="flex flex-wrap gap-2 items-center mb-2">
         <select
           value={symbol}
           onChange={(e) => {
@@ -148,12 +166,50 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
           <option value="buy">Buy</option>
           <option value="sell">Sell</option>
         </select>
+        <select aria-label="Order Type" value={orderType} onChange={(e)=>setOrderType(e.target.value as "market"|"limit")} className="bg-transparent border rounded px-2 py-1">
+          <option value="market">Market</option>
+          <option value="limit">Limit</option>
+        </select>
         <input placeholder="Leverage" value={leverage} onChange={(e)=>setLeverage(e.target.value)} className="bg-transparent border rounded px-2 py-1 w-24" />
         <label className="text-xs flex items-center gap-1">
           <input type="checkbox" checked={reduceOnly} onChange={(e)=>setReduceOnly(e.target.checked)} /> reduce-only
         </label>
         <Button size="sm" disabled={busy} onClick={() => send("/api/v1/exec/open")}>{busy ? "Sending..." : "Open"}</Button>
         <Button size="sm" variant="outline" disabled={busy} onClick={() => send("/api/v1/exec/close")}>{busy ? "Sending..." : "Close"}</Button>
+      </div>
+      {orderType === "limit" && (
+        <div className="flex flex-wrap gap-2 mb-2 text-xs">
+          <input
+            placeholder="Limit price"
+            value={limitPrice}
+            onChange={(e) => setLimitPrice(e.target.value)}
+            className="bg-transparent border rounded px-2 py-1 w-28"
+          />
+          <select
+            aria-label="Time in force"
+            value={timeInForce}
+            onChange={(e) => setTimeInForce(e.target.value)}
+            className="bg-transparent border rounded px-2 py-1"
+          >
+            <option value="Gtc">GTC</option>
+            <option value="Ioc">IOC</option>
+            <option value="Fok">FOK</option>
+          </select>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2 mb-2 text-xs">
+        <input
+          placeholder="Take profit"
+          value={takeProfit}
+          onChange={(e) => setTakeProfit(e.target.value)}
+          className="bg-transparent border rounded px-2 py-1 w-28"
+        />
+        <input
+          placeholder="Stop loss"
+          value={stopLoss}
+          onChange={(e) => setStopLoss(e.target.value)}
+          className="bg-transparent border rounded px-2 py-1 w-28"
+        />
       </div>
       {(minNotional != null || levRange) && (
         <div className="text-xs text-muted-foreground mb-2">{minNotional != null ? `Min notional $${minNotional}` : ''} {levRange ? ` · Lev ${levRange[0]}–${levRange[1]}x` : ''}</div>

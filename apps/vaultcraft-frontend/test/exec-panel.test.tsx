@@ -117,4 +117,31 @@ afterEach(() => {
     render(<ExecPanel vaultId="0xvault" activeSymbol="BTC" onSymbolChange={vi.fn()} />)
     await waitFor(() => expect(screen.getByDisplayValue("BTC")).toBeInTheDocument())
   })
+
+  it("submits limit order parameters", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const fetchMock = vi.fn(async (url: any, init?: RequestInit) => {
+      calls.push({ url: String(url), init })
+      if (calls.length === 1) {
+        return createResponse({ flags: {} })
+      }
+      if (calls.length === 2) {
+        return createResponse({ ok: true })
+      }
+      return createResponse({ ok: true })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<ExecPanel vaultId="0xvault" />)
+    const user = userEvent.setup()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await user.selectOptions(screen.getByLabelText("Order Type"), "limit")
+    await user.clear(screen.getByPlaceholderText("Limit price"))
+    await user.type(screen.getByPlaceholderText("Limit price"), "2500")
+    await user.click(screen.getByRole("button", { name: /open/i }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    const execCall = calls[2]
+    expect(execCall.url).toContain("order_type=limit")
+    expect(execCall.url).toContain("limit_price=2500")
+  })
 })
