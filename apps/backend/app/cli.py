@@ -164,6 +164,45 @@ def main() -> None:
     p7.add_argument("--timeout", type=float, default=10.0, help="HTTP timeout per request")
     p7.set_defaults(func=cmd_soak)
 
+    async def _consume_ws(url: str, headers: Dict[str, str], outfile: Path, duration: float) -> None:
+        import websockets  # type: ignore
+        import asyncio
+
+        end = time.time() + duration
+        outfile.parent.mkdir(parents=True, exist_ok=True)
+        async with websockets.connect(url, extra_headers=headers, ping_interval=None) as ws:
+            while time.time() < end:
+                msg = await asyncio.wait_for(ws.recv(), timeout=duration)
+                outfile.write_text("")  # ensure file exists
+                with outfile.open("a", encoding="utf-8") as fh:
+                    fh.write(msg if isinstance(msg, str) else json.dumps(msg))
+                    fh.write("\n")
+
+    def cmd_quant_ws(args: argparse.Namespace) -> None:
+        import asyncio
+        headers = {}
+        if args.key:
+            headers["X-Quant-Key"] = args.key
+        url = args.url or f"ws://127.0.0.1:8000/ws/quant?vault={args.vault}&interval={args.interval}"
+        outfile = Path(args.outfile)
+
+        async def run():
+            try:
+                await _consume_ws(url, headers, outfile, args.duration)
+            except Exception as exc:
+                print(f"quant ws error: {exc}")
+
+        asyncio.run(run())
+
+    p8 = sub.add_parser("quant-ws", help="Connect to /ws/quant and log snapshots")
+    p8.add_argument("--url", help="Override WebSocket URL (default ws://127.0.0.1:8000/ws/quant)")
+    p8.add_argument("--vault", default="_global", help="Vault id to subscribe")
+    p8.add_argument("--interval", type=float, default=5.0, help="Snapshot interval seconds")
+    p8.add_argument("--duration", type=float, default=60.0, help="Duration in seconds")
+    p8.add_argument("--outfile", default="logs/quant-ws.log", help="Append raw JSON snapshots to this file")
+    p8.add_argument("--key", help="Quant API key to pass via X-Quant-Key header")
+    p8.set_defaults(func=cmd_quant_ws)
+
     args = parser.parse_args()
     args.func(args)
 

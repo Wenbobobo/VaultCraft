@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "text"
     LOG_PATH: str | None = None
+    # Quant API
+    QUANT_API_KEYS: str | None = None
+    QUANT_RATE_LIMIT_PER_MIN: int = 60
 
     # pydantic v2: model_config covers env loading and extra handling
 

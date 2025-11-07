@@ -11,6 +11,7 @@ def test_status_endpoint(monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["ok"] is True and "flags" in body and "network" in body
+    assert "risk_template" in body["flags"]
 
 
 def test_pretrade(monkeypatch):
@@ -21,4 +22,3 @@ def test_pretrade(monkeypatch):
     # Invalid size
     r2 = c.get("/api/v1/pretrade", params={"symbol": "ETH", "size": 0.0, "side": "buy"})
     assert r2.status_code == 200 and r2.json()["ok"] is False
-

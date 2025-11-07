@@ -6,7 +6,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+import asyncio
+import time
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .metrics import compute_metrics
@@ -157,6 +159,39 @@ def require_deployment_key(
     return token
 
 
+_quant_limits: Dict[str, list[float]] = {}
+
+
+def _validate_quant_key_value(key: str | None, path: str, *, increment: bool = True) -> str:
+    keys_raw = getattr(settings, "QUANT_API_KEYS", None) or ""
+    allowed = [k.strip() for k in keys_raw.split(",") if k.strip()]
+    if not allowed:
+        raise HTTPException(status_code=503, detail="quant api disabled")
+    if key not in allowed:
+        logger.warning(
+            "quant key rejected",
+            extra={"event": "auth.quant.reject", "path": path, "token_present": key is not None},
+        )
+        raise HTTPException(status_code=401, detail="invalid quant key")
+    if increment:
+        limit = max(1, int(getattr(settings, "QUANT_RATE_LIMIT_PER_MIN", 60)))
+        now_ts = time.time()
+        window = 60.0
+        history = _quant_limits.setdefault(key, [])
+        history[:] = [ts for ts in history if now_ts - ts < window]
+        if len(history) >= limit:
+            raise HTTPException(status_code=429, detail="quant api rate limit exceeded")
+        history.append(now_ts)
+    return key
+
+
+def require_quant_key(
+    request: Request, key: str | None = Header(default=None, alias="X-Quant-Key")
+):
+    _validate_quant_key_value(key, str(request.url))
+    return key
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -166,8 +201,7 @@ _snapshot_daemon: SnapshotDaemon | None = None
 _user_listener: UserEventsListener | None = None
 
 
-@app.get("/api/v1/status")
-def api_status():
+def _collect_status_snapshot():
     # Sanitize settings for FE/ops visibility
     flags = {
         "enable_sdk": bool(getattr(settings, "ENABLE_HYPER_SDK", False)),
@@ -181,6 +215,14 @@ def api_status():
         "exec_max_notional_usd": getattr(settings, "EXEC_MAX_NOTIONAL_USD", None),
         "exec_min_notional_usd": getattr(settings, "EXEC_MIN_NOTIONAL_USD", None),
     }
+    risk_template = {
+        "allowedSymbols": flags["allowed_symbols"],
+        "minLeverage": flags["exec_min_leverage"],
+        "maxLeverage": flags["exec_max_leverage"],
+        "minNotionalUsd": flags["exec_min_notional_usd"],
+        "maxNotionalUsd": flags["exec_max_notional_usd"],
+    }
+    flags["risk_template"] = risk_template
     try:
         http = HyperHTTP()
         info = http.rpc_ping()
@@ -217,6 +259,11 @@ def api_status():
         "lastAckTs": last_ack,
     }
     return {"ok": True, "flags": flags, "network": rpc, "state": state}
+
+
+@app.get("/api/v1/status")
+def api_status():
+    return _collect_status_snapshot()
 
 
 @app.post("/metrics")
@@ -403,6 +450,57 @@ def api_artifact_mockerc20():
         return {"abi": data.get("abi", []), "bytecode": data.get("bytecode")}
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.get("/api/v1/quant/markets")
+def api_quant_markets(
+    _key: str | None = Depends(require_quant_key),
+):
+    return {"pairs": _load_pairs_from_deployments()}
+
+
+@app.websocket("/ws/quant")
+async def ws_quant(websocket: WebSocket):
+    key = websocket.headers.get("x-quant-key")
+    try:
+        _validate_quant_key_value(key, str(websocket.url), increment=False)
+    except HTTPException:
+        await websocket.close(code=4403)
+        return
+    await websocket.accept()
+    vault = websocket.query_params.get("vault") or "_global"
+    try:
+        interval = float(websocket.query_params.get("interval", "5"))
+    except ValueError:
+        interval = 5.0
+    interval = max(1.0, min(interval, 30.0))
+    try:
+        while True:
+            payload = _collect_status_snapshot()
+            try:
+                profile = get_profile(vault)
+            except Exception:
+                profile = {}
+            allowed_symbols = payload["flags"].get("allowed_symbols") or ""
+            symbols = [s.strip().upper() for s in allowed_symbols.split(",") if s.strip()]
+            prices: Dict[str, float] = {}
+            if symbols:
+                try:
+                    prices = _price_provider.get_index_prices(symbols)
+                except Exception:
+                    prices = {}
+            message = {
+                "type": "quant_snapshot",
+                "ts": time.time(),
+                "status": payload,
+                "vault": vault,
+                "positions": profile,
+                "prices": prices,
+            }
+            await websocket.send_json(message)
+            await asyncio.sleep(interval)
+    except WebSocketDisconnect:
+        return
 
 
 @app.post("/api/v1/register_deployment")
@@ -706,6 +804,29 @@ def api_positions_set(
     )
     # only confirm set; nav is computed via dedicated endpoints with live prices
     return {"ok": True}
+
+
+@app.get("/api/v1/quant/positions")
+def api_quant_positions(
+    vault: str = "_global",
+    _key: str | None = Depends(require_quant_key),
+):
+    return get_profile(vault)
+
+
+@app.get("/api/v1/quant/prices")
+def api_quant_prices(
+    symbols: str,
+    _key: str | None = Depends(require_quant_key),
+):
+    syms = [s for s in symbols.split(",") if s]
+    if not syms:
+        raise HTTPException(status_code=400, detail="symbols required")
+    try:
+        prices = _price_provider.get_index_prices(syms)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="price feed unavailable") from exc
+    return {"prices": prices}
 
 @app.on_event("startup")
 def _startup():
