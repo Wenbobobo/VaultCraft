@@ -79,6 +79,14 @@ export default function ManagerPage() {
   const [advancedLaunch, setAdvancedLaunch] = useState(false)
   const [advancedManage, setAdvancedManage] = useState(false)
   const deploymentKey = process.env.NEXT_PUBLIC_DEPLOYMENT_KEY
+  const TRADING_MARKETS = useMemo(
+    () => [
+      { execSymbol: "ETH", label: "ETH 永续", tvSymbol: "BINANCE:ETHUSDT" },
+      { execSymbol: "BTC", label: "BTC 永续", tvSymbol: "BINANCE:BTCUSDT" },
+    ],
+    []
+  )
+  const [selectedMarket, setSelectedMarket] = useState(TRADING_MARKETS[0])
 
   const validVault = ethers.isAddress(vaultAddr)
 
@@ -177,6 +185,19 @@ export default function ManagerPage() {
       setVaultsLoading(false)
     }
   }, [])
+
+  const syncMarketByExecSymbol = useCallback(
+    (symbolCode: string) => {
+      const match =
+        TRADING_MARKETS.find((m) => m.execSymbol === symbolCode) ?? {
+          execSymbol: symbolCode,
+          label: `${symbolCode} 永续`,
+          tvSymbol: `BINANCE:${symbolCode}USDT`,
+        }
+      setSelectedMarket(match)
+    },
+    [TRADING_MARKETS]
+  )
 
   useEffect(() => {
     void loadVaults()
@@ -487,8 +508,64 @@ export default function ManagerPage() {
               </TabsContent>
 
               <TabsContent value="execute">
-                <Card className="p-6 gradient-card border-border/40 space-y-4">
-                  <h2 className="text-lg font-semibold">Perps Execution (Manager)</h2>
+                <Card className="p-6 gradient-card border-border/40 space-y-6">
+                  <div className="flex flex-col gap-4 lg:flex-row">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div>
+                          <h2 className="text-lg font-semibold">Trading Desk</h2>
+                          <p className="text-xs text-muted-foreground">同步 TradingView 图表与订单面板。</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs uppercase tracking-widest text-muted-foreground">市场</Label>
+                          <Select
+                            value={selectedMarket.execSymbol}
+                            onValueChange={(val) => {
+                              const next =
+                                TRADING_MARKETS.find((m) => m.execSymbol === val) ?? {
+                                  execSymbol: val,
+                                  label: `${val} 永续`,
+                                  tvSymbol: `BINANCE:${val}USDT`,
+                                }
+                              setSelectedMarket(next)
+                            }}
+                          >
+                            <SelectTrigger className="w-36">
+                              <SelectValue placeholder="选择市场" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TRADING_MARKETS.map((m) => (
+                                <SelectItem key={m.execSymbol} value={m.execSymbol}>
+                                  {m.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <TradingChart symbol={selectedMarket.tvSymbol} />
+                    </div>
+                    <div className="w-full lg:w-[360px] shrink-0 space-y-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-muted-foreground">Perps Execution (Manager)</h3>
+                        <p className="text-xs text-muted-foreground">
+                          只对白名单管理者开放的下单面板，可与上方市场选择保持一致。
+                        </p>
+                      </div>
+                      {validVault ? (
+                        <ExecPanel
+                          vaultId={vaultAddr}
+                          activeSymbol={selectedMarket.execSymbol}
+                          onSymbolChange={syncMarketByExecSymbol}
+                        />
+                      ) : (
+                        <div className="text-sm text-muted-foreground rounded border border-dashed border-border/40 p-3">
+                          请输入有效的 Vault 地址以启用交易面板。
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Separator />
                   <div className="space-y-3">
                     <Label>Vault Address</Label>
                     <Select
@@ -554,11 +631,6 @@ export default function ManagerPage() {
                       </div>
                     )}
                   </div>
-                  {!validVault ? (
-                    <div className="text-sm text-muted-foreground">请输入有效的 Vault 地址以启用执行面板。</div>
-                  ) : (
-                    <ExecPanel vaultId={vaultAddr} />
-                  )}
                 </Card>
               </TabsContent>
 

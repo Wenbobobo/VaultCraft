@@ -99,4 +99,22 @@ afterEach(() => {
       }),
     )
   })
+
+  it("syncs symbol from parent prop", async () => {
+    const fetchMock = vi.fn(async (url: any) => {
+      if (String(url).includes("/api/v1/status")) {
+        return createResponse({
+          flags: {},
+        })
+      }
+      if (String(url).includes("/api/v1/pretrade")) {
+        return createResponse({ ok: true })
+      }
+      return createResponse({ ok: true })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<ExecPanel vaultId="0xvault" activeSymbol="BTC" onSymbolChange={vi.fn()} />)
+    await waitFor(() => expect(screen.getByDisplayValue("BTC")).toBeInTheDocument())
+  })
 })

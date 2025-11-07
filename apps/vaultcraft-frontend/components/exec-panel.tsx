@@ -5,8 +5,14 @@ import { BACKEND_URL } from "@/lib/config"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 
-export function ExecPanel({ vaultId }: { vaultId: string }) {
-  const [symbol, setSymbol] = useState("ETH")
+type ExecPanelProps = {
+  vaultId: string
+  activeSymbol?: string
+  onSymbolChange?: (symbol: string) => void
+}
+
+export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelProps) {
+  const [symbol, setSymbol] = useState(activeSymbol ?? "ETH")
   const [size, setSize] = useState("0.1")
   const [side, setSide] = useState<"buy" | "sell">("buy")
   const [busy, setBusy] = useState(false)
@@ -34,6 +40,12 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
   useEffect(() => {
     void loadRisk()
   }, [loadRisk])
+
+  useEffect(() => {
+    if (activeSymbol && activeSymbol !== symbol) {
+      setSymbol(activeSymbol)
+    }
+  }, [activeSymbol, symbol])
 
   function mapPretradeError(s: string | undefined): string {
     if (!s) return "Pretrade check failed"
@@ -119,7 +131,15 @@ export function ExecPanel({ vaultId }: { vaultId: string }) {
     <div className="p-4 rounded-md border border-border/40">
       <div className="text-sm text-muted-foreground mb-2">Demo Exec (dry-run unless enabled)</div>
       <div className="flex gap-2 items-center mb-2">
-        <select value={symbol} onChange={(e) => setSymbol(e.target.value)} className="bg-transparent border rounded px-2 py-1">
+        <select
+          value={symbol}
+          onChange={(e) => {
+            const next = e.target.value
+            setSymbol(next)
+            onSymbolChange?.(next)
+          }}
+          className="bg-transparent border rounded px-2 py-1"
+        >
           <option>ETH</option>
           <option>BTC</option>
         </select>
