@@ -62,6 +62,8 @@
 - POSITIONS_FILE / EVENT_LOG_FILE：本地持仓/事件持久化（演示）
 - DEPLOYMENT_API_TOKEN：设置后，所有后台写接口（exec/open|close、nav/snapshot、positions:set、register_deployment）都要求携带 `X-Deployment-Key`
 - LOG_LEVEL / LOG_FORMAT / LOG_PATH：后端日志级别与格式（`json` 输出结构化日志），指定 `LOG_PATH` 时会自动创建目录并写入文件
+- QUANT_API_KEYS：逗号分隔 API Key 白名单，启用 `/api/v1/quant/*` 量化接口时必须配置
+- QUANT_RATE_LIMIT_PER_MIN：每个 Quant API Key 每分钟允许的请求数（默认 60），超限返回 429
 
 ---
 

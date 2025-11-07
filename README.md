@@ -141,6 +141,7 @@ flowchart LR
 | 告警 | `ALERT_WEBHOOK_URL` / `ALERT_COOLDOWN_SEC` / `ALERT_NAV_DRAWDOWN_PCT` | 可直接使用 fwalert 链路 |
 
 | 部署写接口 | `DEPLOYMENT_API_TOKEN` | 若配置，`/api/v1/exec/*`、`/api/v1/nav/snapshot/*`、`/api/v1/positions/*`、`/api/v1/register_deployment` 均要求 `X-Deployment-Key`；建议仅由后端脚本/CI 调用，前端演示需显式传入 |
+| Quant API | `QUANT_API_KEYS` | 逗号分隔 API Key 白名单；启用后 `/api/v1/quant/*` 需附带 `X-Quant-Key` |
 | 日志 | `LOG_LEVEL` / `LOG_FORMAT` / `LOG_PATH` | `LOG_FORMAT=json` 输出结构化 JSON；`LOG_PATH` 留空时写 stdout，指定路径会自动创建目录并写入文件 |
 
 | 前端 | `NEXT_PUBLIC_BACKEND_URL` / `NEXT_PUBLIC_RPC_URL` / `NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS` / `NEXT_PUBLIC_ENABLE_DEMO_TRADING` | 默认显示钱包按钮；填入 Hyper USDC 可跳过 MockERC20 流程 |
@@ -238,7 +239,7 @@ flowchart LR
 
 4. **金库管理**：下拉选择最新部署的金库，可调整白名单、锁期、绩效费、Guardian 等高级设置。  
 
-5. **仓位执行**：`仓位执行` 标签页先进行 `/pretrade` 风控校验，再触发 `/exec/open|close`；展示最小名义金额、杠杆超限、Reduce-only fallback 等提示。  
+5. **交易面板**：切换“交易面板”Tab，选择市场后 TradingView 图表与订单票据会同步；支持 Market/Limit、GTC/IOC/FOK、Reduce-only、止盈/止损与最小名义提示。  
 
 6. **投资者视角**：在 `/browse` 发现金库，`/vault/{id}` 查看 KPI / NAV / Events / Holdings，`/portfolio` 查看份额、锁定期与简易 PnL。  
 
@@ -310,11 +311,16 @@ flowchart LR
 
 | 调研 / 历史 | `docs/research/PERPS_RESEARCH.md`, `docs/research/Perps 适配器及交易品种调研报告.pdf`, `docs/archive/*` |
 
-  
+
+## 📡 Quant API（Beta）
+
+- 在 `.env` 配置 `QUANT_API_KEYS=alpha,beta` 后，客户端需在 Header 附带 `X-Quant-Key`。
+- `GET /api/v1/quant/positions?vault=0x...`：返回指定 Vault 的现金、仓位、份额。
+- `GET /api/v1/quant/prices?symbols=BTC,ETH`：提供行情数据，口径与风控一致。
+- `GET /api/v1/quant/markets`：暴露可交易对及杠杆上限，便于量化终端同步。
+ - `WS /ws/quant?vault=0x...&interval=5`：WebSocket 推送 status/risk/positions/价格快照，Header 同样需附带 `X-Quant-Key`。可用 CLI `uv run python -m app.cli quant-ws --vault 0x... --interval 5 --duration 300 --key alpha --outfile logs/quant-stream.jsonl` 快速拉取样本。
 
 ---
-
-  
 
 ## 🗺 Roadmap 概览
 

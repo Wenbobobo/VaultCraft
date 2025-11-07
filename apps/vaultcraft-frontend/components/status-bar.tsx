@@ -46,6 +46,13 @@ export function StatusBar() {
   if (!flags) return null
   const mode = flags.enable_live_exec ? t("status.mode.live", "Live") : t("status.mode.dryrun", "Dry-run")
   const modeColor = flags.enable_live_exec ? "text-green-400" : "text-yellow-400"
+  const riskTemplate = (flags as any).risk_template as {
+    allowedSymbols?: string
+    minLeverage?: number
+    maxLeverage?: number
+    minNotionalUsd?: number
+    maxNotionalUsd?: number
+  } | undefined
   const lastTs = runtime?.listenerLastTs
   const ageSec = lastTs ? Math.max(0, Math.round(Date.now() / 1000 - lastTs)) : null
   const listenerState = (() => {
@@ -114,6 +121,15 @@ export function StatusBar() {
           {t("status.snapshot.title", "Snapshot")}:{" "}
           <span className={runtime?.snapshot === "running" ? "text-green-400" : "text-yellow-400"}>
             {runtime?.snapshot || t("status.snapshot.idle", "idle")}
+          </span>
+        </div>
+      )}
+      {riskTemplate && (
+        <div>
+          {t("status.risk.label", "Risk")}:{" "}
+          <span className="font-mono">
+            {riskTemplate.allowedSymbols ?? "—"} · {riskTemplate.minNotionalUsd ? `$${riskTemplate.minNotionalUsd}+` : "—"} ·{" "}
+            {riskTemplate.minLeverage != null && riskTemplate.maxLeverage != null ? `${riskTemplate.minLeverage}–${riskTemplate.maxLeverage}x` : "—"}
           </span>
         </div>
       )}

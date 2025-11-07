@@ -37,7 +37,7 @@
 6. Manager 创建与执行（/manager）
    - “Deploy New Vault”：验证 Asset 字段（推荐 USDC），设置名称符号等，点击部署；部署完成后 Launch Checklist 会记录最近部署地址。
    - “Manage Vault”：输入新地址，读取当前参数；可修改白名单、锁期、绩效费、Adapter。
-   - “Perps Execution”：在 Exec 面板尝试过小名义金额（提示最小 $10）→ 调整为 ETH `0.01`；若 Listener 运行，事件流将出现 `source: ws`。
+   - “交易面板”：先在上方市场下拉选择 ETH/BTC，TradingView 图表与订单票据同步；演示 Market/Limit（GTC/IOC）、Reduce-only、止盈/止损；过小名义金额会触发最小 $10 提示，Listener 运行时事件流出现 `source: ws`。
 7. 投资（Deposit）
    - 打开 Deposit 弹窗，输入金额 → 自动走 ERC20 `approve` → `vault.deposit` 交易发送与确认
    - 若为私募且未白名单：交易将被拒绝，前端友好提示（演示前建议预白名单评委地址）

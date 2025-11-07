@@ -22,6 +22,12 @@ describe("StatusBar", () => {
           exec_min_leverage: 1,
           exec_max_leverage: 5,
           exec_min_notional_usd: 10,
+          risk_template: {
+            allowedSymbols: "BTC,ETH",
+            minLeverage: 1,
+            maxLeverage: 5,
+            minNotionalUsd: 10,
+          },
         },
         network: { chainId: 998, block: 12345 },
         state: {
@@ -58,5 +64,6 @@ describe("StatusBar", () => {
     expect(screen.getByText(/Ack:/i)).toHaveTextContent("last ack <1m")
     expect(screen.getByText(/Symbols:/i)).toHaveTextContent("BTC,ETH")
     expect(screen.getByText(/Lev/i)).toHaveTextContent("1–5x")
+    expect(screen.getByText(/Risk:/i)).toBeInTheDocument()
   })
 })
