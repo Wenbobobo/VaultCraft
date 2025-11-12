@@ -5,14 +5,23 @@ import { BACKEND_URL } from "@/lib/config"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 
+const VENUE_SYMBOLS: Record<string, string[]> = {
+  hyper: ["ETH", "BTC"],
+  mock_gold: ["XAU"],
+}
+
 type ExecPanelProps = {
   vaultId: string
   activeSymbol?: string
-  onSymbolChange?: (symbol: string) => void
+  activeVenue?: string
+  onSymbolChange?: (symbol: string, venue: string) => void
 }
 
-export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelProps) {
-  const [symbol, setSymbol] = useState(activeSymbol ?? "ETH")
+export function ExecPanel({ vaultId, activeSymbol, activeVenue, onSymbolChange }: ExecPanelProps) {
+  const initialVenue = activeVenue ?? "hyper"
+  const initialSymbol = activeSymbol ?? (VENUE_SYMBOLS[initialVenue] ?? VENUE_SYMBOLS["hyper"])[0]
+  const [venue, setVenue] = useState(initialVenue)
+  const [symbol, setSymbol] = useState(initialSymbol)
   const [size, setSize] = useState("0.1")
   const [side, setSide] = useState<"buy" | "sell">("buy")
   const [busy, setBusy] = useState(false)
@@ -32,7 +41,8 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
   // Load risk hints from backend status for UX prompts
   const loadRisk = useCallback(async () => {
     try {
-      const r = await fetch(`${BACKEND_URL}/api/v1/status`, { cache: "no-store" })
+      const qs = vaultId ? `?vault=${vaultId}` : ""
+      const r = await fetch(`${BACKEND_URL}/api/v1/status${qs}`, { cache: "no-store" })
       if (!r.ok) return
       const b = await r.json()
       const mn = b?.flags?.exec_min_notional_usd
@@ -40,11 +50,21 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
       const minL = b?.flags?.exec_min_leverage, maxL = b?.flags?.exec_max_leverage
       if (typeof minL === 'number' && typeof maxL === 'number') setLevRange([minL, maxL])
     } catch {}
-  }, [])
+  }, [vaultId])
 
   useEffect(() => {
     void loadRisk()
   }, [loadRisk])
+
+  useEffect(() => {
+    if (activeVenue && activeVenue !== venue) {
+      setVenue(activeVenue)
+      const allowed = VENUE_SYMBOLS[activeVenue] ?? VENUE_SYMBOLS["hyper"]
+      if (!allowed.includes(symbol)) {
+        setSymbol(allowed[0])
+      }
+    }
+  }, [activeVenue, symbol, venue])
 
   useEffect(() => {
     if (activeSymbol && activeSymbol !== symbol) {
@@ -55,6 +75,7 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
   function mapPretradeError(s: string | undefined): string {
     if (!s) return "Pretrade check failed"
     const t = s.toLowerCase()
+    if (t.includes("venue")) return "Venue not allowed"
     if (t.includes("symbol") && t.includes("not allowed")) return "Symbol not in allowlist"
     if (t.includes("leverage")) return "Leverage out of bounds"
     if (t.includes("below minimum") || t.includes("minimum value")) return "Notional below minimum ($10)"
@@ -91,6 +112,7 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
       // pretrade check
       const pre = new URLSearchParams()
       pre.set("symbol", symbol)
+      pre.set("venue", venue)
       pre.set("size", size)
       pre.set("side", path.includes("open") ? side : "close")
       if (reduceOnly) pre.set("reduce_only", "true")
@@ -106,6 +128,7 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
       const params = new URLSearchParams()
       params.set("vault", vaultId)
       params.set("symbol", symbol)
+      params.set("venue", venue)
       if (path.includes("open")) {
         params.set("size", size)
         params.set("side", side)
@@ -150,16 +173,35 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
       <div className="text-sm text-muted-foreground mb-2">Demo Exec (dry-run unless enabled)</div>
       <div className="flex flex-wrap gap-2 items-center mb-2">
         <select
+          aria-label="Venue"
+          value={venue}
+          onChange={(e) => {
+            const nextVenue = e.target.value
+            setVenue(nextVenue)
+            const allowed = VENUE_SYMBOLS[nextVenue] ?? VENUE_SYMBOLS["hyper"]
+            if (!allowed.includes(symbol)) {
+              const nextSymbol = allowed[0]
+              setSymbol(nextSymbol)
+              onSymbolChange?.(nextSymbol, nextVenue)
+            }
+          }}
+          className="bg-transparent border rounded px-2 py-1"
+        >
+          <option value="hyper">Hyper Perps</option>
+          <option value="mock_gold">Mock Gold (XAU)</option>
+        </select>
+        <select
           value={symbol}
           onChange={(e) => {
             const next = e.target.value
             setSymbol(next)
-            onSymbolChange?.(next)
+            onSymbolChange?.(next, venue)
           }}
           className="bg-transparent border rounded px-2 py-1"
         >
-          <option>ETH</option>
-          <option>BTC</option>
+          {(VENUE_SYMBOLS[venue] ?? VENUE_SYMBOLS["hyper"]).map((opt) => (
+            <option key={opt}>{opt}</option>
+          ))}
         </select>
         <input value={size} onChange={(e) => setSize(e.target.value)} className="bg-transparent border rounded px-2 py-1 w-24" />
         <select value={side} onChange={(e) => setSide(e.target.value as any)} className="bg-transparent border rounded px-2 py-1">
@@ -212,7 +254,10 @@ export function ExecPanel({ vaultId, activeSymbol, onSymbolChange }: ExecPanelPr
         />
       </div>
       {(minNotional != null || levRange) && (
-        <div className="text-xs text-muted-foreground mb-2">{minNotional != null ? `Min notional $${minNotional}` : ''} {levRange ? ` · Lev ${levRange[0]}–${levRange[1]}x` : ''}</div>
+        <div className="text-xs text-muted-foreground mb-2">
+          Venue: {venue === "hyper" ? "Hyper Perps" : "Mock Gold"} {minNotional != null ? ` · Min notional $${minNotional}` : ""}
+          {levRange ? ` · Lev ${levRange[0]}–${levRange[1]}x` : ""}
+        </div>
       )}
       {error && (
         <div data-testid="exec-error" className="text-xs text-destructive mb-2">{error}</div>

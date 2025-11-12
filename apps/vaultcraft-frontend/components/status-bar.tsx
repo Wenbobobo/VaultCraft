@@ -11,6 +11,7 @@ type Flags = {
   enable_snapshot_daemon: boolean
   address?: string | null
   allowed_symbols?: string
+  allowed_venues?: string
   exec_min_leverage?: number
   exec_max_leverage?: number
   exec_min_notional_usd?: number
@@ -101,6 +102,11 @@ export function StatusBar() {
       {flags.allowed_symbols && (
         <div>
           {t("status.symbols", "Symbols")}: <span className="font-mono">{flags.allowed_symbols}</span>
+        </div>
+      )}
+      {flags.allowed_venues && (
+        <div>
+          {t("status.venues", "Venues")}: <span className="font-mono">{flags.allowed_venues}</span>
         </div>
       )}
       {(flags.exec_min_leverage != null && flags.exec_max_leverage != null) && (

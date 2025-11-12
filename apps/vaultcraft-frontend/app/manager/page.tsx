@@ -10,6 +10,7 @@ import { StatusBar } from "@/components/status-bar"
 import { ExecPanel } from "@/components/exec-panel"
 import { useWallet } from "@/hooks/use-wallet"
 import { BACKEND_URL, DEFAULT_ASSET_ADDRESS } from "@/lib/config"
+import { RiskTemplateEditor } from "@/components/risk-template-editor"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -81,8 +82,9 @@ export default function ManagerPage() {
   const deploymentKey = process.env.NEXT_PUBLIC_DEPLOYMENT_KEY
   const TRADING_MARKETS = useMemo(
     () => [
-      { execSymbol: "ETH", label: "ETH 永续", tvSymbol: "BINANCE:ETHUSDT" },
-      { execSymbol: "BTC", label: "BTC 永续", tvSymbol: "BINANCE:BTCUSDT" },
+      { execSymbol: "ETH", label: "ETH 永续", tvSymbol: "BINANCE:ETHUSDT", venue: "hyper" },
+      { execSymbol: "BTC", label: "BTC 永续", tvSymbol: "BINANCE:BTCUSDT", venue: "hyper" },
+      { execSymbol: "XAU", label: "XAU 模拟 (Mock Gold)", tvSymbol: "OANDA:XAUUSD", venue: "mock_gold" },
     ],
     []
   )
@@ -187,12 +189,16 @@ export default function ManagerPage() {
   }, [])
 
   const syncMarketByExecSymbol = useCallback(
-    (symbolCode: string) => {
+    (symbolCode: string, venueOverride?: string) => {
       const match =
-        TRADING_MARKETS.find((m) => m.execSymbol === symbolCode) ?? {
+        TRADING_MARKETS.find(
+          (m) => m.execSymbol === symbolCode && (!venueOverride || m.venue === venueOverride)
+        ) ??
+        {
           execSymbol: symbolCode,
           label: `${symbolCode} 永续`,
           tvSymbol: `BINANCE:${symbolCode}USDT`,
+          venue: venueOverride ?? "hyper",
         }
       setSelectedMarket(match)
     },
@@ -556,6 +562,7 @@ export default function ManagerPage() {
                         <ExecPanel
                           vaultId={vaultAddr}
                           activeSymbol={selectedMarket.execSymbol}
+                          activeVenue={selectedMarket.venue}
                           onSymbolChange={syncMarketByExecSymbol}
                         />
                       ) : (
@@ -760,9 +767,11 @@ export default function ManagerPage() {
                           <Input value={newGuardian} onChange={(e)=>setNewGuardian(e.target.value)} placeholder="0x..." />
                         </div>
                         <Button onClick={()=> call("setGuardian", newGuardian)}>Update Guardian</Button>
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+                  <Separator />
+                  <RiskTemplateEditor vaultId={validVault ? vaultAddr : ""} backendUrl={BACKEND_URL} />
                   {mgmtMsg && <div className="text-xs text-muted-foreground break-all">{mgmtMsg}</div>}
                 </Card>
               </TabsContent>
