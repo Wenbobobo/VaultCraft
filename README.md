@@ -13,7 +13,7 @@
 
 - **双形态金库**：公募金库保持 HyperLiquid 式透明；私募金库只向白名单披露 NAV/PnL，未来采用零知识证明+账户抽象化实现隐私交易。
 
-- **受控执行通道**：链上 Router/Adapter + 后端 Exec Service 双重限权，限制标的、杠杆、名义金额，支持 reduce-only 与自动电话告警。
+- **受控执行通道**：链上 Router/Adapter + 后端 Exec Service 双重限权，限制标的、杠杆、名义金额，支持 reduce-only、自动电话告警，并可在 Hyper Perps ↔ Mock Gold（XAU）之间切换。
 
 - **All in One 快速部署**：钱包连接、状态栏、NAV 曲线、事件流、经理控制台与投资者 Portfolio 集成于单一应用。
 
@@ -39,9 +39,9 @@
 
 | 信息披露 | 持仓/事件全公开 | NAV/PnL 与 KPI 公示，持仓隐藏 | 私募需要链上 whitelist；邀请码演示走前端 |
 
-| 执行通道 | Hyper SDK（dry-run ↔ live），失败可 reduce-only | 同 | `ENABLE_LIVE_EXEC` 统一开关 |
+| 执行通道 | Hyper SDK（dry-run ↔ live），失败可 reduce-only；Mock Gold/XAU demo 走 `mock_gold` venue | 同 | `ENABLE_LIVE_EXEC` 统一开关，`venue` 参数控制具体适配器 |
 
-| 风控 | 交易对白名单、杠杆上/下限、名义金额区间、告警黄条 | 同 | `/status` 实时返回参数 |
+| 风控 | 交易对白名单、杠杆上/下限、名义金额区间、告警黄条；Manager 设置页可编辑 per-vault Risk Template | 同 | `/status` 实时返回参数 |
 
 | 告警 | 回撤 / 执行失败 → Webhook（电话/短信） | 同 | 冷却策略可配 |
 
@@ -134,14 +134,14 @@ flowchart LR
 
 | --- | --- | --- |
 
-| 执行与行情 | `HYPER_API_URL` / `HYPER_RPC_URL` / `ENABLE_HYPER_SDK` / `ENABLE_LIVE_EXEC` / `HYPER_TRADER_PRIVATE_KEY` (或 `PRIVATE_KEY`) / `EXEC_ALLOWED_SYMBOLS` / `EXEC_MIN/MAX_LEVERAGE` / `EXEC_MIN/MAX_NOTIONAL_USD` / `EXEC_MARKET_SLIPPAGE_BPS` / `EXEC_RO_SLIPPAGE_BPS` / `EXEC_RETRY_*` / `APPLY_*_TO_POSITIONS` | Hyper 测试网最小下单约 $10，建议 `EXEC_MIN_NOTIONAL_USD=10` |
+| 执行与行情 | `HYPER_API_URL` / `HYPER_RPC_URL` / `ENABLE_HYPER_SDK` / `ENABLE_LIVE_EXEC` / `HYPER_TRADER_PRIVATE_KEY` (或 `PRIVATE_KEY`) / `EXEC_ALLOWED_SYMBOLS` / `EXEC_ALLOWED_VENUES` / `EXEC_MIN/MAX_LEVERAGE` / `EXEC_MIN/MAX_NOTIONAL_USD` / `EXEC_MARKET_SLIPPAGE_BPS` / `EXEC_RO_SLIPPAGE_BPS` / `EXEC_RETRY_*` / `APPLY_*_TO_POSITIONS` | Hyper 测试网最小下单约 $10，建议 `EXEC_MIN_NOTIONAL_USD=10`；`EXEC_ALLOWED_VENUES` 控制可用适配器（如 `hyper,mock_gold`） |
 
 | Listener & Snapshot | `ENABLE_USER_WS_LISTENER` / `ADDRESS` / `ENABLE_SNAPSHOT_DAEMON` / `SNAPSHOT_INTERVAL_SEC` | Listener 需开启 live exec 且使用有余额私钥 |
 
 | 告警 | `ALERT_WEBHOOK_URL` / `ALERT_COOLDOWN_SEC` / `ALERT_NAV_DRAWDOWN_PCT` | 可直接使用 fwalert 链路 |
 
 | 部署写接口 | `DEPLOYMENT_API_TOKEN` | 若配置，`/api/v1/exec/*`、`/api/v1/nav/snapshot/*`、`/api/v1/positions/*`、`/api/v1/register_deployment` 均要求 `X-Deployment-Key`；建议仅由后端脚本/CI 调用，前端演示需显式传入 |
-| Quant API | `QUANT_API_KEYS` | 逗号分隔 API Key 白名单；启用后 `/api/v1/quant/*` 需附带 `X-Quant-Key` |
+| Quant API | `QUANT_API_KEYS` / `ENABLE_QUANT_ORDERS` | 逗号分隔 API Key 白名单；启用后 `/api/v1/quant/*` 需附带 `X-Quant-Key`。可用 `uv run python -m app.cli quant-keys --list/--add/--remove` 统一增删；将 `ENABLE_QUANT_ORDERS=1` 打开量化下单端点。 |
 | 日志 | `LOG_LEVEL` / `LOG_FORMAT` / `LOG_PATH` | `LOG_FORMAT=json` 输出结构化 JSON；`LOG_PATH` 留空时写 stdout，指定路径会自动创建目录并写入文件 |
 
 | 前端 | `NEXT_PUBLIC_BACKEND_URL` / `NEXT_PUBLIC_RPC_URL` / `NEXT_PUBLIC_DEFAULT_ASSET_ADDRESS` / `NEXT_PUBLIC_ENABLE_DEMO_TRADING` | 默认显示钱包按钮；填入 Hyper USDC 可跳过 MockERC20 流程 |
@@ -318,7 +318,16 @@ flowchart LR
 - `GET /api/v1/quant/positions?vault=0x...`：返回指定 Vault 的现金、仓位、份额。
 - `GET /api/v1/quant/prices?symbols=BTC,ETH`：提供行情数据，口径与风控一致。
 - `GET /api/v1/quant/markets`：暴露可交易对及杠杆上限，便于量化终端同步。
- - `WS /ws/quant?vault=0x...&interval=5`：WebSocket 推送 status/risk/positions/价格快照，Header 同样需附带 `X-Quant-Key`。可用 CLI `uv run python -m app.cli quant-ws --vault 0x... --interval 5 --duration 300 --key alpha --outfile logs/quant-stream.jsonl` 快速拉取样本。
+- `WS /ws/quant?vault=0x...&interval=5`：WebSocket 推送 status/risk/positions/价格快照，并在 `events` 字段附带最新 exec/fill 事件，`deltas.positions` 表示仓位增量。Header 同样需附带 `X-Quant-Key`。CLI 示例：`uv run python -m app.cli quant-ws --vault 0x... --interval 5 --duration 300 --key alpha --outfile logs/quant-stream.jsonl`。
+- `POST /api/v1/quant/orders/open` & `/close`：量化端直接调用 Exec Service（默认 dry-run，设置 `ENABLE_LIVE_EXEC=1` 后可落地实单）。需 `ENABLE_QUANT_ORDERS=1`。可用 CLI `uv run python -m app.cli quant-order --backend http://127.0.0.1:8000 --key alpha --symbol ETH --size 1 --side buy --vault 0x...` 快速提交。
+- 多市场：订单/Pretrade/Exec 均新增 `venue` 字段（默认 `hyper`，可选 `mock_gold` 用于 XAU Demo），配合 `EXEC_ALLOWED_VENUES`/`allowedVenues` 风控模板，前端/CLI 可以自由切换；长期路线见 `docs/architecture/MULTI_MARKET_ADAPTER.md`。
+- 多市场接入的整体蓝图与步骤详见 `docs/architecture/MULTI_MARKET_ADAPTER.md`。
+
+## ⚠️ Risk Template Override
+
+- `GET /api/v1/vaults/{vault}/risk`：返回平台默认模板（base）、当前 per-vault override 与生效值（effective）。
+- `PUT /api/v1/vaults/{vault}/risk`：提交覆写字段（允许标的、杠杆区间、名义额度），空体代表恢复默认；已写回 `deployments/hyper-testnet.json`。
+- Manager 设置页的 “Risk Template Override” 表单已对接该接口，可视化编辑 + 一键重置，配合 `/status` 与 Exec Panel 风控提示保持一致。
 
 ---
 

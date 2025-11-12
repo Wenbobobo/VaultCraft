@@ -2,12 +2,22 @@
 
 ## 当前进度（最新）
 
+- 2025-11-07 Beta Update：
+  - Manager “交易面板”集成 TradingView，执行票据支持 Market/Limit（GTC/IOC/FOK）、Reduce-only、止盈/止损，并在 StatusBar 展示风险模板。
+  - Backend `Order` / `/api/v1/exec/open` / Hyper SDK driver 已落地 limit/TP/SL 字段；Quant API（`/api/v1/quant/*` + `/ws/quant`）与 `quant-ws` CLI 全面开放，`QUANT_API_KEYS` + 速率限制已配置，`deployments/*.json` 可通过 `risk` 字段覆写 per-vault 风控模板。
+- 2025-11-08 Beta+ Update：
+  - `/ws/quant` WebSocket 推送新增 `events`（exec/fill）与 `deltas.positions`（仓位增量），CLI `quant-ws` 可直接记录增量流。
+  - 新增 CLI `uv run python -m app.cli quant-keys`（list/add/remove/generate）管理 `QUANT_API_KEYS`，避免手动编辑 `.env`。
+  - 后端暴露 `/api/v1/vaults/{vault}/risk` GET/PUT，Manager 设置页新增“Risk Template Override”面板，可对单 Vault 编辑/TR 复用 per-vault 风控模板。
+  - `ENABLE_QUANT_ORDERS` 打开后，`/api/v1/quant/orders/open|close` 允许量化端直接复用 Exec Service；CLI `quant-order` 支持本地提交，默认仍为 dry-run。
+
 - 文档
   - PRD v0（../product/PRD.md）；Tech Design（../architecture/TECH_DESIGN.md）；架构解析（../architecture/ARCHITECTURE.md）；前端规范（../architecture/FRONTEND_SPEC.md）；配置清单（CONFIG.md）；Hyper 集成（../architecture/HYPER_INTEGRATION.md）；Hyper 部署（../ops/HYPER_DEPLOYMENT.md）
   - v1 里程碑与验收清单：../product/PLAN_V1.md（黑客松演示范围 P0–P3；集中仓位相关移至 v2）
   - README.md 更新 Hyper Testnet 定位、Feature Matrix、Quickstart、Roadmap；新增 `docs/ops/PITCH_DECK.md` 路演稿
   - 商用化路线图：`docs/product/ROADMAP.md`（Alpha 稳健化、Beta 专业交易面板、Gamma 多市场、Delta 商业化）
   - DEPLOYMENT Alpha 自查清单：`docs/ops/DEPLOYMENT_ALPHA_CHECKLIST.md`
+  - 多市场适配器蓝图：`docs/architecture/MULTI_MARKET_ADAPTER.md`（列出 Hyper / Synthetix / mock-gold / Polymarket 接入点、风险模板设计、执行路由、阶段性目标）
 - 合约（Hardhat + Foundry）
   - Vault（ERC20 shares，最短锁定、HWM 绩效费、私募白名单、适配器白名单、可暂停）
   - Hardhat 测试 + 覆盖率：Vault.sol statements 85.71%，branches 51.16%，functions 77.78%，lines 100%
@@ -159,3 +169,10 @@
 
 ### Gamma / Delta（预研）
 - 多 venue 适配、WhisperFi 私募增强、Merke 承诺、费用结算等细化见 ROADMAP 文档。
+  - Quant WS：消息含 `events`（最近 exec/fill）和 `deltas.positions`，用于量化端实时对账。
+  - Risk Template API：`GET/PUT /api/v1/vaults/{vault}/risk` 读写 `deployments/hyper-testnet.json` 中的 per-vault `risk` 模板，PUT 允许空体重置为平台默认。
+- Quant Orders：`enable_quant_orders` flag + `POST /api/v1/quant/orders/open|close`，默认 dry-run，结合 ExecService 风控；CLI `quant-order` 作为示例调用。
+- 多市场基线：Exec Service 支持 `order.venue`，新增 `EXEC_ALLOWED_VENUES`、`mock_gold` 驱动，并在 `/api/v1/status`、Risk Template API、Quant CLI 中暴露 venue；Frontend Exec Panel/Trading Desk 可切换 `hyper` ↔ `mock_gold`。
+- CLI：新增 `quant-keys` 子命令，支持 `--list/--add/--remove/--generate` 操作 `.env` 中的 `QUANT_API_KEYS`；`quant-ws` help 说明包含 delta/events。
+  - Manager Settings：新增 Risk Template Override 表单，直接调用 `/api/v1/vaults/{id}/risk` 保存/重置 per-vault 风控参数，支持允许标的、杠杆/名义区间。
+  - Manager 文案更新 README/DEMO：强调 Quant Orders 需显式开启，默认 dry-run，配合 CLI 做演示。

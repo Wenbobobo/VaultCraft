@@ -30,6 +30,7 @@
   - lockDays：默认锁定天数（1）
   - perfFeeBps：绩效费（1000）
   - whitelist：初始白名单数组（可空）
+- risk（可选）：`{"allowedSymbols":"BTC,ETH","minLeverage":1,"maxLeverage":5,"minNotionalUsd":10,"maxNotionalUsd":100000}`，用于覆盖 `/api/v1/status?vault=...` 返回的 per-vault 风控模板
 
 用途：前端/后端可读取该文件初始化显示与内置参数（仅演示场景）。
 
@@ -55,6 +56,8 @@
   - EXEC_RO_SLIPPAGE_BPS：Reduce-Only 滑点（留空时继承上项）
   - EXEC_RETRY_ATTEMPTS：遇到“Price too far…”等错误时的额外重试次数（默认 0）
   - EXEC_RETRY_BACKOFF_SEC：重试间隔秒数（默认 1.0）
+- EXEC_ALLOWED_VENUES：允许的执行适配器列表（默认 `hyper`）；多市场模式下可加入 `mock_gold`,`synthetix` 等
+- MOCK_GOLD_PRICE：`mock_gold` 适配器的默认指数价（USD），本地 Demo 可自行调整
 - ALERT_WEBHOOK_URL：告警 webhook 地址（例如 `https://fwalert.com/...`），为空则不发送
 - ALERT_COOLDOWN_SEC：告警冷却秒数（默认 120）
 - ALERT_NAV_DRAWDOWN_PCT：NAV 回撤触发阈值（默认 0.05，即 5%）
@@ -64,6 +67,8 @@
 - LOG_LEVEL / LOG_FORMAT / LOG_PATH：后端日志级别与格式（`json` 输出结构化日志），指定 `LOG_PATH` 时会自动创建目录并写入文件
 - QUANT_API_KEYS：逗号分隔 API Key 白名单，启用 `/api/v1/quant/*` 量化接口时必须配置
 - QUANT_RATE_LIMIT_PER_MIN：每个 Quant API Key 每分钟允许的请求数（默认 60），超限返回 429
+- 管理：推荐使用 `uv run python -m app.cli quant-keys --list/--add/--remove --env-file .env` 统一增删轮换，避免手动编辑 `.env`
+- ENABLE_QUANT_ORDERS：开启后 `/api/v1/quant/orders/open|close` 可用；未启用时返回 503（防止误触实单）
 
 ---
 
