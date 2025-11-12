@@ -12,6 +12,7 @@ class Order:
     symbol: str
     size: float
     side: str  # "buy" | "sell"
+    venue: str = "hyper"
     reduce_only: bool = False
     leverage: float | None = None
     order_type: str = "market"  # "market" | "limit"

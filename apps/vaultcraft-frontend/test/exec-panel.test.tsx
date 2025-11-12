@@ -143,5 +143,29 @@ afterEach(() => {
     const execCall = calls[2]
     expect(execCall.url).toContain("order_type=limit")
     expect(execCall.url).toContain("limit_price=2500")
+    expect(execCall.url).toContain("venue=hyper")
+  })
+
+  it("switches to mock gold venue and auto selects XAU", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const fetchMock = vi.fn(async (url: any, init?: RequestInit) => {
+      calls.push({ url: String(url), init })
+      if (calls.length === 1) {
+        return createResponse({ flags: {} })
+      }
+      return createResponse({ ok: true })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<ExecPanel vaultId="0xvault" />)
+    const user = userEvent.setup()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await user.selectOptions(screen.getByLabelText("Venue"), "Mock Gold (XAU)")
+    await waitFor(() => expect(screen.getByDisplayValue("XAU")).toBeInTheDocument())
+    await user.click(screen.getByRole("button", { name: /Open/i }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    const execCall = calls[2]
+    expect(execCall.url).toContain("venue=mock_gold")
+    expect(execCall.url).toContain("symbol=XAU")
   })
 })

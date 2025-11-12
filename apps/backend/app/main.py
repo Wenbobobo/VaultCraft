@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional
 
 import asyncio
 import time
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, ConfigDict
 from fastapi.middleware.cors import CORSMiddleware
 
 from .metrics import compute_metrics
@@ -201,7 +202,7 @@ _snapshot_daemon: SnapshotDaemon | None = None
 _user_listener: UserEventsListener | None = None
 
 
-def _collect_status_snapshot():
+def _collect_status_snapshot(vault_id: str | None = None):
     # Sanitize settings for FE/ops visibility
     flags = {
         "enable_sdk": bool(getattr(settings, "ENABLE_HYPER_SDK", False)),
@@ -210,6 +211,7 @@ def _collect_status_snapshot():
         "enable_snapshot_daemon": bool(getattr(settings, "ENABLE_SNAPSHOT_DAEMON", False)),
         "address": getattr(settings, "ADDRESS", None),
         "allowed_symbols": getattr(settings, "EXEC_ALLOWED_SYMBOLS", ""),
+        "allowed_venues": getattr(settings, "EXEC_ALLOWED_VENUES", "hyper"),
         "exec_min_leverage": getattr(settings, "EXEC_MIN_LEVERAGE", None),
         "exec_max_leverage": getattr(settings, "EXEC_MAX_LEVERAGE", None),
         "exec_max_notional_usd": getattr(settings, "EXEC_MAX_NOTIONAL_USD", None),
@@ -217,11 +219,17 @@ def _collect_status_snapshot():
     }
     risk_template = {
         "allowedSymbols": flags["allowed_symbols"],
+        "allowedVenues": flags["allowed_venues"],
         "minLeverage": flags["exec_min_leverage"],
         "maxLeverage": flags["exec_max_leverage"],
         "minNotionalUsd": flags["exec_min_notional_usd"],
         "maxNotionalUsd": flags["exec_max_notional_usd"],
     }
+    if vault_id:
+        meta = _lookup_vault_meta(vault_id)
+        risk_override = meta.get("risk") if isinstance(meta, dict) else None
+        if isinstance(risk_override, dict) and risk_override:
+            risk_template = {**risk_template, **risk_override}
     flags["risk_template"] = risk_template
     try:
         http = HyperHTTP()
@@ -261,9 +269,46 @@ def _collect_status_snapshot():
     return {"ok": True, "flags": flags, "network": rpc, "state": state}
 
 
+def _positions_delta(
+    previous: Dict[str, float] | None,
+    current: Dict[str, Any],
+    epsilon: float = 1e-9,
+) -> Dict[str, float]:
+    """Compute delta between two position maps."""
+    if current is None:
+        current = {}
+    curr = {str(k): float(v) for k, v in dict(current).items()}
+    if previous is None:
+        return {}
+    delta: Dict[str, float] = {}
+    keys = set(previous.keys()) | set(curr.keys())
+    for sym in keys:
+        before = float(previous.get(sym, 0.0))
+        after = float(curr.get(sym, 0.0))
+        diff = after - before
+        if abs(diff) > epsilon:
+            delta[sym] = diff
+    return delta
+
+
+def _flat_positions(profile: Dict[str, Any]) -> Dict[str, float]:
+    flat = profile.get("positionsFlat")
+    if isinstance(flat, dict) and flat:
+        return {str(k): float(v) for k, v in flat.items()}
+    by_venue = profile.get("positionsByVenue")
+    combined: Dict[str, float] = {}
+    if isinstance(by_venue, dict) and by_venue:
+        for venue, entries in by_venue.items():
+            for sym, val in entries.items():
+                combined[f"{venue}::{sym}"] = float(val)
+        return combined
+    positions = profile.get("positions", {})
+    return {f"hyper::{sym}": float(val) for sym, val in dict(positions).items()}
+
+
 @app.get("/api/v1/status")
-def api_status():
-    return _collect_status_snapshot()
+def api_status(vault: str | None = None):
+    return _collect_status_snapshot(vault)
 
 
 @app.post("/metrics")
@@ -315,12 +360,15 @@ def api_nav(address: str, window: int = 30):
 
     profile = get_profile(address)
     router = PriceRouter()
-    syms = list(profile.get("positions", {}).keys()) if profile else []
+    positions_flat = _flat_positions(profile)
+    syms = list(positions_flat.keys())
     try:
         prices = router.get_index_prices(syms) if syms else {}
     except Exception:
         prices = {s: 1000.0 + 100.0 * i for i, s in enumerate(syms)}
-    nav_val = HyperExecClient.pnl_to_nav(cash=profile.get("cash", 1_000_000.0), positions=profile.get("positions", {}), index_prices=prices)
+    nav_val = HyperExecClient.pnl_to_nav(
+        cash=profile.get("cash", 1_000_000.0), positions=positions_flat, index_prices=prices
+    )
     nav = [round(nav_val / profile.get("denom", 1_000_000.0), 6)] * max(1, window)
     _nav_cache.set(cache_key, nav)
     return {"address": address, "nav": nav}
@@ -349,7 +397,8 @@ def api_nav_snapshot(
     """
     if nav is None:
         profile = get_profile(address)
-        syms = list(profile.get("positions", {}).keys()) if profile else []
+        positions_flat = _flat_positions(profile)
+        syms = list(positions_flat.keys())
         router = PriceRouter()
         try:
             prices = router.get_index_prices(syms) if syms else {}
@@ -357,7 +406,7 @@ def api_nav_snapshot(
             prices = {s: 1000.0 + 100.0 * i for i, s in enumerate(syms)}
         nav_val = HyperExecClient.pnl_to_nav(
             cash=profile.get("cash", 1_000_000.0),
-            positions=profile.get("positions", {}),
+            positions=positions_flat,
             index_prices=prices,
         )
         nav = round(nav_val / profile.get("denom", 1_000_000.0), 6)
@@ -398,6 +447,205 @@ def _load_pairs_from_deployments() -> List[Dict[str, object]]:
         except Exception:
             pass
     return [{"symbol": "BTC", "leverage": 5}, {"symbol": "ETH", "leverage": 5}]
+
+
+def _deployments_path() -> Path:
+    return REPO_ROOT / "deployments" / "hyper-testnet.json"
+
+
+def _read_deployments_doc() -> Dict[str, Any]:
+    f = _deployments_path()
+    if not f.exists():
+        return {}
+    try:
+        return json.loads(f.read_text() or "{}")
+    except Exception:
+        return {}
+
+
+def _write_deployments_doc(doc: Dict[str, Any]) -> None:
+    f = _deployments_path()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(doc, indent=2, ensure_ascii=False)
+    f.write_text(text + "\n", encoding="utf-8")
+
+
+def _ensure_deployments_container(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    deployments = doc.get("deployments")
+    if isinstance(deployments, list):
+        cleaned = [d for d in deployments if isinstance(d, dict)]
+        doc["deployments"] = cleaned
+        return cleaned
+    cleaned: List[Dict[str, Any]] = []
+    doc["deployments"] = cleaned
+    legacy_vault = doc.get("vault")
+    if isinstance(legacy_vault, str):
+        entry: Dict[str, Any] = {"vault": legacy_vault}
+        asset = doc.get("asset")
+        if isinstance(asset, str) and asset:
+            entry["asset"] = asset
+        cleaned.append(entry)
+    return cleaned
+
+
+def _load_deployments_meta() -> List[Dict[str, object]]:
+    data = _read_deployments_doc()
+    deployments = data.get("deployments")
+    if isinstance(deployments, list):
+        return [d for d in deployments if isinstance(d, dict)]
+    legacy = {}
+    if isinstance(data.get("vault"), str):
+        legacy["vault"] = data.get("vault")
+    if data.get("asset"):
+        legacy["asset"] = data.get("asset")
+    return [legacy] if legacy.get("vault") else []
+
+
+def _lookup_vault_meta(vault_id: str | None) -> Dict[str, object]:
+    if not vault_id:
+        return {}
+    vid = vault_id.lower()
+    for entry in _load_deployments_meta():
+        val = entry.get("vault")
+        if isinstance(val, str) and val.lower() == vid:
+            return entry
+    return {}
+
+
+_RISK_FIELDS = {
+    "allowedSymbols",
+    "allowedVenues",
+    "minLeverage",
+    "maxLeverage",
+    "minNotionalUsd",
+    "maxNotionalUsd",
+}
+
+
+def _normalize_csv_field(value: Any, *, upper: bool = True) -> str:
+    tokens: List[str] = []
+    if isinstance(value, str):
+        source = value.replace(";", ",")
+        tokens = [t.strip() for t in source.split(",") if t.strip()]
+    elif isinstance(value, list):
+        tokens = [str(v).strip() for v in value if str(v).strip()]
+    else:
+        raise HTTPException(status_code=400, detail="expected string or list")
+    if not tokens:
+        return ""
+    if upper:
+        tokens = [t.upper() for t in tokens]
+    else:
+        tokens = [t.lower() for t in tokens]
+    return ",".join(tokens)
+
+
+def _sanitize_risk_payload(payload: Dict[str, Any]) -> tuple[Dict[str, Any], set[str]]:
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="payload must be an object")
+    cleaned: Dict[str, Any] = {}
+    remove: set[str] = set()
+    for key, value in payload.items():
+        if key not in _RISK_FIELDS:
+            raise HTTPException(status_code=400, detail=f"unknown field: {key}")
+        if value is None:
+            remove.add(key)
+            continue
+        if key == "allowedSymbols":
+            normalized = _normalize_csv_field(value, upper=True)
+            if normalized:
+                cleaned[key] = normalized
+            else:
+                remove.add(key)
+            continue
+        if key == "allowedVenues":
+            normalized = _normalize_csv_field(value, upper=False)
+            if normalized:
+                cleaned[key] = normalized
+            else:
+                remove.add(key)
+            continue
+        try:
+            cleaned[key] = float(value)
+        except Exception as exc:  # pragma: no cover - defensive
+            raise HTTPException(status_code=400, detail=f"invalid value for {key}") from exc
+    return cleaned, remove
+
+
+def _persist_vault_risk_override(
+    vault_id: str,
+    to_set: Dict[str, Any],
+    to_remove: set[str],
+) -> Dict[str, Any]:
+    doc = _read_deployments_doc()
+    deployments = _ensure_deployments_container(doc)
+    vid = vault_id.lower()
+    target = None
+    for entry in deployments:
+        val = entry.get("vault")
+        if isinstance(val, str) and val.lower() == vid:
+            target = entry
+            break
+    if target is None:
+        target = {"vault": vault_id}
+        deployments.append(target)
+    existing = dict(target.get("risk", {})) if isinstance(target.get("risk"), dict) else {}
+    for field in to_remove:
+        existing.pop(field, None)
+    existing.update(to_set)
+    cleaned = {k: v for k, v in existing.items() if v not in ("", None)}
+    if cleaned:
+        target["risk"] = cleaned
+    else:
+        target.pop("risk", None)
+    _write_deployments_doc(doc)
+    return cleaned
+
+
+def _ensure_quant_orders_enabled() -> None:
+    if not getattr(settings, "ENABLE_QUANT_ORDERS", False):
+        raise HTTPException(status_code=503, detail="quant order api disabled")
+
+
+class QuantOrderPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str
+    size: float
+    side: str
+    venue: str = "hyper"
+    reduce_only: bool = False
+    leverage: float | None = None
+    order_type: str = "market"
+    limit_price: float | None = None
+    time_in_force: str | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    vault: str = "_global"
+
+    def to_order(self) -> Order:
+        return Order(
+            symbol=self.symbol,
+            size=self.size,
+            side=self.side,
+            venue=self.venue,
+            reduce_only=self.reduce_only,
+            leverage=self.leverage,
+            order_type=self.order_type,
+            limit_price=self.limit_price,
+            time_in_force=self.time_in_force,
+            stop_loss=self.stop_loss,
+            take_profit=self.take_profit,
+        )
+
+
+class QuantClosePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str
+    size: float | None = None
+    venue: str = "hyper"
+    vault: str = "_global"
 
 
 @app.get("/api/v1/markets")
@@ -474,6 +722,10 @@ async def ws_quant(websocket: WebSocket):
     except ValueError:
         interval = 5.0
     interval = max(1.0, min(interval, 30.0))
+    last_positions: Dict[str, float] | None = None
+    event_cursor: float | None = None
+    EVENT_CURSOR_EPS = 1e-6
+    MAX_BOOT_EVENTS = 20
     try:
         while True:
             payload = _collect_status_snapshot()
@@ -489,14 +741,33 @@ async def ws_quant(websocket: WebSocket):
                     prices = _price_provider.get_index_prices(symbols)
                 except Exception:
                     prices = {}
+            events: List[Dict[str, Any]]
+            if event_cursor is None:
+                events = event_store.list(vault, limit=MAX_BOOT_EVENTS)
+            else:
+                events = event_store.list(vault, since=event_cursor)
+            if events:
+                try:
+                    latest = max(float(e.get("ts", 0.0)) for e in events)
+                except Exception:
+                    latest = time.time()
+                event_cursor = latest + EVENT_CURSOR_EPS
+            positions_map = _flat_positions(profile)
+            deltas = _positions_delta(last_positions, positions_map)
+            last_positions = dict(positions_map)
             message = {
                 "type": "quant_snapshot",
                 "ts": time.time(),
                 "status": payload,
                 "vault": vault,
                 "positions": profile,
+                "positionsFlat": positions_map,
+                "positionsByVenue": profile.get("positionsByVenue", {}),
                 "prices": prices,
+                "events": events,
             }
+            if deltas:
+                message["deltas"] = {"positions": deltas}
             await websocket.send_json(message)
             await asyncio.sleep(interval)
     except WebSocketDisconnect:
@@ -578,6 +849,7 @@ def api_exec_open(
     symbol: str,
     size: float,
     side: str,
+    venue: str = "hyper",
     reduce_only: bool = False,
     leverage: float | None = None,
     order_type: str = "market",
@@ -595,6 +867,7 @@ def api_exec_open(
             symbol=symbol,
             size=size,
             side=side,
+            venue=venue,
             reduce_only=reduce_only,
             leverage=leverage,
             order_type=order_type,
@@ -612,6 +885,7 @@ def api_exec_open(
             "symbol": symbol,
             "size": size,
             "side": side,
+             "venue": venue,
             "reduce_only": reduce_only,
             "leverage": leverage,
             "order_type": order_type,
@@ -628,11 +902,12 @@ def api_exec_open(
 def api_exec_close(
     symbol: str,
     size: float | None = None,
+    venue: str = "hyper",
     vault: str = "_global",
     _token: str | None = Depends(require_deployment_key),
 ):
     svc = ExecService()
-    result = svc.close(vault, symbol=symbol, size=size)
+    result = svc.close(vault, symbol=symbol, size=size, venue=venue)
     logger.info(
         "exec.close processed",
         extra={
@@ -640,6 +915,7 @@ def api_exec_close(
             "vault": vault,
             "symbol": symbol,
             "size": size,
+            "venue": venue,
             "dry_run": bool(result.get("dry_run")),
             "status": result.get("status", "ok"),
         },
@@ -648,10 +924,10 @@ def api_exec_close(
 
 
 @app.get("/api/v1/pretrade")
-def api_pretrade(symbol: str, size: float, side: str, reduce_only: bool = False, leverage: float | None = None):
+def api_pretrade(symbol: str, size: float, side: str, reduce_only: bool = False, leverage: float | None = None, venue: str = "hyper"):
     svc = ExecService()
     try:
-        svc._validate(Order(symbol=symbol, size=size, side=side, reduce_only=reduce_only, leverage=leverage))
+        svc._validate(Order(symbol=symbol, size=size, side=side, reduce_only=reduce_only, leverage=leverage, venue=venue))
         return {"ok": True}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -727,13 +1003,14 @@ def api_vault_detail(vault_id: str):
         info = {"id": vault_id, "name": "Vault", "type": "private"}
     # compute NAV + metrics
     profile = get_profile(vault_id)
-    syms = list(profile.get("positions", {}).keys()) if profile else []
+    positions_flat = _flat_positions(profile)
+    syms = list(positions_flat.keys())
     try:
         prices = _price_provider.get_index_prices(syms) if syms else {}
     except Exception:
         prices = {s: 1000.0 + 100.0 * i for i, s in enumerate(syms)}
     nav_val = HyperExecClient.pnl_to_nav(
-        cash=profile.get("cash", 1_000_000.0), positions=profile.get("positions", {}), index_prices=prices
+        cash=profile.get("cash", 1_000_000.0), positions=positions_flat, index_prices=prices
     )
     unit_nav = round(nav_val / profile.get("denom", 1_000_000.0), 6)
     nav_series = [unit_nav] * 60
@@ -768,6 +1045,30 @@ def api_vault_detail(vault_id: str):
         "totalShares": int(profile.get("denom", 1_000_000.0)),
         **({"asset": asset_addr} if asset_addr else {}),
     }
+
+
+@app.get("/api/v1/vaults/{vault_id}/risk")
+def api_vault_risk(vault_id: str):
+    base = _collect_status_snapshot().get("flags", {}).get("risk_template", {})
+    effective = _collect_status_snapshot(vault_id).get("flags", {}).get("risk_template", {})
+    meta = _lookup_vault_meta(vault_id)
+    override = meta.get("risk") if isinstance(meta.get("risk"), dict) else {}
+    return {"vault": vault_id, "base": base, "override": override or {}, "effective": effective}
+
+
+@app.put("/api/v1/vaults/{vault_id}/risk")
+def api_vault_risk_update(
+    vault_id: str,
+    payload: Dict[str, Any] | None = Body(default=None),
+):
+    if payload:
+        to_set, to_remove = _sanitize_risk_payload(payload)
+    else:
+        to_set, to_remove = {}, set(_RISK_FIELDS)
+    override = _persist_vault_risk_override(vault_id, to_set, to_remove)
+    base = _collect_status_snapshot().get("flags", {}).get("risk_template", {})
+    effective = _collect_status_snapshot(vault_id).get("flags", {}).get("risk_template", {})
+    return {"vault": vault_id, "base": base, "override": override, "effective": effective}
 
 
 # --- Positions admin (dev/demo) ---
@@ -827,6 +1128,28 @@ def api_quant_prices(
     except Exception as exc:
         raise HTTPException(status_code=502, detail="price feed unavailable") from exc
     return {"prices": prices}
+
+
+@app.post("/api/v1/quant/orders/open")
+def api_quant_order_open(
+    payload: QuantOrderPayload,
+    _key: str | None = Depends(require_quant_key),
+):
+    _ensure_quant_orders_enabled()
+    svc = ExecService()
+    result = svc.open(payload.vault, payload.to_order())
+    return {"vault": payload.vault, "venue": payload.venue, "result": result}
+
+
+@app.post("/api/v1/quant/orders/close")
+def api_quant_order_close(
+    payload: QuantClosePayload,
+    _key: str | None = Depends(require_quant_key),
+):
+    _ensure_quant_orders_enabled()
+    svc = ExecService()
+    result = svc.close(payload.vault, payload.symbol, payload.size, venue=payload.venue)
+    return {"vault": payload.vault, "venue": payload.venue, "result": result}
 
 @app.on_event("startup")
 def _startup():

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
+import time
 from pathlib import Path
 from typing import Dict
 
@@ -13,6 +15,7 @@ from .hyper_exec import HyperExecClient, Order
 from .exec_service import ExecService
 from .positions import get_profile, set_profile
 from .soak import run_soak, file_sink
+from .quant_keys import list_keys as quant_list_keys, update_keys as quant_update_keys, resolve_env_file as quant_env_file
 
 
 def cmd_rpc_ping(args: argparse.Namespace) -> None:
@@ -43,6 +46,85 @@ def cmd_nav(args: argparse.Namespace) -> None:
     prices: Dict[str, float] = json.loads(args.prices)
     nav = HyperExecClient.pnl_to_nav(cash=args.cash, positions=positions, index_prices=prices)
     print(json.dumps({"nav": nav}, indent=2))
+
+
+def cmd_quant_order(args: argparse.Namespace) -> None:
+    base = args.backend.rstrip("/")
+    headers = {}
+    if args.key:
+        headers["X-Quant-Key"] = args.key
+    timeout = getattr(args, "timeout", 15.0)
+    if args.close:
+        payload: Dict[str, object] = {"symbol": args.symbol, "vault": args.vault, "venue": args.venue}
+        if args.size is not None:
+            payload["size"] = args.size
+        url = f"{base}/api/v1/quant/orders/close"
+    else:
+        if args.size is None or args.size <= 0:
+            raise SystemExit("--size must be > 0 for open orders")
+        payload = {
+            "symbol": args.symbol,
+            "size": args.size,
+            "side": args.side,
+            "vault": args.vault,
+            "venue": args.venue,
+            "reduce_only": args.reduce_only,
+            "order_type": args.order_type,
+        }
+        if args.limit_price is not None:
+            payload["limit_price"] = args.limit_price
+        if args.time_in_force:
+            payload["time_in_force"] = args.time_in_force
+        if args.leverage is not None:
+            payload["leverage"] = args.leverage
+        if args.stop_loss is not None:
+            payload["stop_loss"] = args.stop_loss
+        if args.take_profit is not None:
+            payload["take_profit"] = args.take_profit
+        url = f"{base}/api/v1/quant/orders/open"
+    resp = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError:
+        print(f"[quant-order] error {resp.status_code}: {resp.text}")
+        raise SystemExit(1)
+    print(json.dumps(resp.json(), indent=2))
+
+
+def _print_quant_keys(env_file: Path, keys: list[str]) -> None:
+    if not keys:
+        print(f"{env_file}: (empty)")
+        return
+    print(f"{env_file}: {', '.join(keys)}")
+
+
+def cmd_quant_keys(args: argparse.Namespace) -> None:
+    env_file = quant_env_file(args.env_file)
+    ops_requested = any(
+        [
+            args.add,
+            args.remove,
+            args.set_keys,
+            args.generate is not None,
+        ]
+    )
+    if args.set_keys and (args.add or args.remove or (args.generate and args.generate > 0)):
+        raise SystemExit("--set cannot be combined with --add/--remove/--generate")
+    if not ops_requested and not args.list:
+        raise SystemExit("specify --list, --add, --remove, --set, or --generate")
+    if not ops_requested and args.list:
+        keys = quant_list_keys(env_file)
+        _print_quant_keys(env_file, keys)
+        return
+    generated = max(args.generate or 0, 0)
+    updated = quant_update_keys(
+        env_file,
+        add=args.add,
+        remove=args.remove,
+        set_keys=args.set_keys,
+        generate=generated,
+    )
+    _print_quant_keys(env_file, updated)
 
 
 def main() -> None:
@@ -194,7 +276,7 @@ def main() -> None:
 
         asyncio.run(run())
 
-    p8 = sub.add_parser("quant-ws", help="Connect to /ws/quant and log snapshots")
+    p8 = sub.add_parser("quant-ws", help="Connect to /ws/quant and log snapshots + deltas/events")
     p8.add_argument("--url", help="Override WebSocket URL (default ws://127.0.0.1:8000/ws/quant)")
     p8.add_argument("--vault", default="_global", help="Vault id to subscribe")
     p8.add_argument("--interval", type=float, default=5.0, help="Snapshot interval seconds")
@@ -202,6 +284,34 @@ def main() -> None:
     p8.add_argument("--outfile", default="logs/quant-ws.log", help="Append raw JSON snapshots to this file")
     p8.add_argument("--key", help="Quant API key to pass via X-Quant-Key header")
     p8.set_defaults(func=cmd_quant_ws)
+
+    p10 = sub.add_parser("quant-order", help="Submit quant order via backend REST (requires ENABLE_QUANT_ORDERS=1)")
+    p10.add_argument("--backend", default=os.getenv("BACKEND_URL", "http://127.0.0.1:8000"), help="Backend base URL")
+    p10.add_argument("--key", required=True, help="Quant API key (X-Quant-Key)")
+    p10.add_argument("--vault", default="_global", help="Logical vault id (default _global)")
+    p10.add_argument("--symbol", required=True, help="Symbol, e.g. ETH")
+    p10.add_argument("--size", type=float, help="Order size (positive). Optional for --close.")
+    p10.add_argument("--side", choices=["buy", "sell"], default="buy")
+    p10.add_argument("--venue", default="hyper", help="Execution venue (hyper, mock_gold, ...)")
+    p10.add_argument("--leverage", type=float, help="Optional leverage")
+    p10.add_argument("--order-type", choices=["market", "limit"], default="market")
+    p10.add_argument("--time-in-force", dest="time_in_force", help="TIF for limit orders (Gtc, Ioc, Fok)")
+    p10.add_argument("--limit-price", type=float, dest="limit_price", help="Required when order-type=limit")
+    p10.add_argument("--reduce-only", action="store_true", help="Mark order as reduce-only")
+    p10.add_argument("--stop-loss", type=float, dest="stop_loss")
+    p10.add_argument("--take-profit", type=float, dest="take_profit")
+    p10.add_argument("--timeout", type=float, default=15.0)
+    p10.add_argument("--close", action="store_true", help="Call /orders/close instead of open")
+    p10.set_defaults(func=cmd_quant_order)
+
+    p9 = sub.add_parser("quant-keys", help="Inspect or edit QUANT_API_KEYS inside an env file")
+    p9.add_argument("--env-file", help="Path to .env (default: repo .env)")
+    p9.add_argument("--list", action="store_true", help="Print keys (after mutation if any)")
+    p9.add_argument("--add", nargs="+", help="Add one or more keys")
+    p9.add_argument("--remove", nargs="+", help="Remove one or more keys")
+    p9.add_argument("--set", nargs="+", dest="set_keys", help="Replace with the provided keys (mutually exclusive)")
+    p9.add_argument("--generate", type=int, nargs="?", const=1, help="Append N random keys (default 1)")
+    p9.set_defaults(func=cmd_quant_keys)
 
     args = parser.parse_args()
     args.func(args)

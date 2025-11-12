@@ -15,7 +15,11 @@ class PriceProvider:
 
 class RestPriceProvider(PriceProvider):
     def __init__(self, api_base: str | None = None, timeout: float | None = None):
-        self.http = HyperHTTP(api_base=api_base or settings.HYPER_API_URL, rpc_url=settings.HYPER_RPC_URL, timeout=timeout or settings.PRICE_TIMEOUT)
+        self.http = HyperHTTP(
+            api_base=api_base or settings.HYPER_API_URL,
+            rpc_url=settings.HYPER_RPC_URL,
+            timeout=timeout or settings.PRICE_TIMEOUT,
+        )
 
     def get_index_prices(self, symbols: List[str]) -> Dict[str, float]:
         return self.http.get_index_prices(symbols)
@@ -31,6 +35,7 @@ class SDKPriceProvider(PriceProvider):
     def available() -> bool:
         try:
             import hyperliquid  # noqa: F401
+
             return True
         except Exception:
             return False
@@ -38,14 +43,13 @@ class SDKPriceProvider(PriceProvider):
     def _get_info(self):
         if self._info is None:
             from hyperliquid.info import Info  # type: ignore
-            # Avoid opening WS in SDK to keep it lightweight in API calls
+
             self._info = Info(base_url=self.api_base, skip_ws=True, timeout=self.timeout)
         return self._info
 
     def get_index_prices(self, symbols: List[str]) -> Dict[str, float]:
         info = self._get_info()
         mids = info.all_mids()
-        # SDK returns list of {"name": sym, "mid": price} or similar; accept common shapes
         out: Dict[str, float] = {}
         if isinstance(mids, list):
             for item in mids:
@@ -54,7 +58,6 @@ class SDKPriceProvider(PriceProvider):
                 if name in symbols and mid is not None:
                     out[name] = float(mid)
         elif isinstance(mids, dict):
-            # sometimes as {sym: price}
             for k, v in mids.items():
                 if k in symbols:
                     out[k] = float(v)
@@ -63,22 +66,27 @@ class SDKPriceProvider(PriceProvider):
 
 class PriceRouter(PriceProvider):
     def __init__(self):
-        # Rebuild settings to reflect current env at instantiation (useful in tests)
         env = Settings()
         self.sdk_enabled = bool(env.ENABLE_HYPER_SDK)
         self.sdk = SDKPriceProvider()
         self.rest = RestPriceProvider()
+        self.mock_gold_price = float(getattr(env, "MOCK_GOLD_PRICE", 2350.0))
 
-    def get_index_prices(self, symbols: List[str]) -> Dict[str, float]:
-        symbols = [s for s in symbols if s]
+    def _split_symbol(self, token: str) -> tuple[str, str]:
+        if "::" in token:
+            venue, sym = token.split("::", 1)
+            return venue.lower(), sym.upper()
+        return "hyper", token.upper()
+
+    def _fetch_hyper_prices(self, assets: List[str]) -> Dict[str, float]:
+        symbols = [s for s in assets if s]
         if not symbols:
             return {}
         if self.sdk_enabled and self.sdk.available():
             try:
-                # If HyperHTTP.get_index_prices has been monkeypatched (tests),
-                # honor the patch by preferring REST path to keep determinism.
                 try:
-                    from .hyper_client import HyperHTTP as _H  # local import to avoid cycles
+                    from .hyper_client import HyperHTTP as _H  # local import
+
                     patched = getattr(_H.get_index_prices, "__module__", "") != "app.hyper_client"
                 except Exception:
                     patched = False
@@ -90,8 +98,32 @@ class PriceRouter(PriceProvider):
                     return data
             except Exception:
                 pass
-        # fallback to REST; outer layer may fallback to deterministic
         return self.rest.get_index_prices(symbols)
+
+    def get_index_prices(self, symbols: List[str]) -> Dict[str, float]:
+        grouped: Dict[str, List[tuple[str, str]]] = {}
+        for token in symbols:
+            if not token:
+                continue
+            venue, asset = self._split_symbol(token)
+            grouped.setdefault(venue, []).append((token, asset))
+        if not grouped:
+            return {}
+        result: Dict[str, float] = {}
+        for venue, entries in grouped.items():
+            if venue == "hyper":
+                unique = sorted({asset for (_, asset) in entries})
+                prices = self._fetch_hyper_prices(unique)
+                for original, asset in entries:
+                    value = prices.get(asset)
+                    if value is not None:
+                        result[original] = value
+            elif venue == "mock_gold":
+                for original, _ in entries:
+                    result[original] = self.mock_gold_price
+            else:
+                raise RuntimeError(f"unsupported venue: {venue}")
+        return result
 
 
 class CachedPriceRouter(PriceProvider):
@@ -122,15 +154,12 @@ class CachedPriceRouter(PriceProvider):
                     except Exception:
                         pass
         if data is None or not data:
-            # return last_good if available
             lg = self.last_good.get(key)
             if lg:
                 return lg
-            # propagate last error for outer handler
             if last_err:
                 raise last_err
             return {}
-        if data:
-            self.cache.set(key, data)
-            self.last_good[key] = data
+        self.cache.set(key, data)
+        self.last_good[key] = data
         return data

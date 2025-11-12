@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     APPLY_DRY_RUN_TO_POSITIONS: bool = True
     # Exec risk controls
     EXEC_ALLOWED_SYMBOLS: str = "BTC,ETH"
+    EXEC_ALLOWED_VENUES: str = "hyper"
     EXEC_MAX_SIZE: float = 100.0
     EXEC_MIN_LEVERAGE: float = 1.0
     EXEC_MAX_LEVERAGE: float = 50.0
@@ -71,6 +72,7 @@ class Settings(BaseSettings):
     # Quant API
     QUANT_API_KEYS: str | None = None
     QUANT_RATE_LIMIT_PER_MIN: int = 60
+    ENABLE_QUANT_ORDERS: bool = False
 
     # pydantic v2: model_config covers env loading and extra handling
 

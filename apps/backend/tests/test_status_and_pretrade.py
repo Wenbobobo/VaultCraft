@@ -14,6 +14,21 @@ def test_status_endpoint(monkeypatch):
     assert "risk_template" in body["flags"]
 
 
+def test_status_endpoint_with_vault(monkeypatch):
+    from app import main as main_mod
+
+    def fake_lookup(vault_id: str | None):
+        return {"risk": {"allowedSymbols": "FOO", "minLeverage": 2, "maxLeverage": 4, "minNotionalUsd": 50}}
+
+    monkeypatch.setattr(main_mod, "_lookup_vault_meta", fake_lookup)
+    c = TestClient(app)
+    r = c.get("/api/v1/status", params={"vault": "0xABC"})
+    assert r.status_code == 200
+    tpl = r.json()["flags"]["risk_template"]
+    assert tpl["allowedSymbols"] == "FOO"
+    assert tpl["minLeverage"] == 2
+
+
 def test_pretrade(monkeypatch):
     c = TestClient(app)
     # Allowed by default settings: ETH
